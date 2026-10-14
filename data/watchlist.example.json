@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy to data/watchlist.json (gitignored) and edit. Each company may carry any subset of the vendor slugs below; only present vendors are polled. Slugs are the public board identifiers — find them from the offer URLs you already applied through (boards.greenhouse.io/{slug}, jobs.lever.co/{slug}, apply.workable.com/{slug}, jobs.smartrecruiters.com/{id}, jobs.ashbyhq.com/{org}, careers.{host}/jobs.json).",
+  "companies": [
+    { "name": "GitLab", "greenhouse": "gitlab" },
+    { "name": "Spotify", "lever": "spotify" },
+    { "name": "Voi", "teamtailor": "voi.com" },
+    { "name": "Ashby", "ashby": "ashby" },
+    { "name": "SmartRecruiters", "smartrecruiters": "smartrecruiters" },
+    { "name": "Grubhub", "workable": "grubhub" }
+  ]
+}

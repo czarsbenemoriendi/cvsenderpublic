@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CVSender — panel</title>
+<link rel="stylesheet" href="/static/vendor/panel.css">
+<style>
+  /* Small bits daisyUI/Tailwind don't cover. */
+  mark { background: hsl(45 100% 50% / .35); color: inherit; padding: 0 2px; border-radius: 3px; }
+  .lc-body p { margin: 0 0 .6rem; }
+  .lc-body p:last-child { margin-bottom: 0; }
+  .lc-body ul { margin: .4rem 0; padding-left: 1.25rem; list-style: disc; }
+  .lc-body li { margin-bottom: .25rem; }
+  .qa-item summary { list-style: none; }
+  .qa-item summary::-webkit-details-marker { display: none; }
+  .qa-item summary::before {
+    content: '▸'; flex-shrink: 0; line-height: 1.5;
+    transition: transform .12s;
+  }
+  .qa-item[open] summary::before { transform: rotate(90deg); }
+  /* Funnel bar segments — bg-* utilities are purged from the vendor build,
+     so drive daisyUI theme vars directly. */
+  .funnel-su { background-color: var(--fallback-su, oklch(var(--su))); color: var(--fallback-suc, oklch(var(--suc))); }
+  .funnel-in { background-color: var(--fallback-in, oklch(var(--in))); color: var(--fallback-inc, oklch(var(--inc))); }
+  .funnel-p  { background-color: var(--fallback-p,  oklch(var(--p)));  color: var(--fallback-pc,  oklch(var(--pc))); }
+  .funnel-wa { background-color: var(--fallback-wa, oklch(var(--wa))); color: var(--fallback-wac, oklch(var(--wac))); }
+  .funnel-a  { background-color: var(--fallback-a,  oklch(var(--a)));  color: var(--fallback-ac,  oklch(var(--ac))); }
+</style>
+</head>
+<body class="min-h-screen bg-base-200 text-base-content">
+
+<header class="sticky top-0 z-30 border-b border-base-300 bg-base-100/90 backdrop-blur">
+  <div class="mx-auto w-full max-w-[1720px] px-5 pt-4 sm:px-8 lg:px-14">
+    <div class="flex items-center justify-between gap-4 pb-3">
+      <div class="flex items-center gap-3">
+        <h1 class="m-0 text-xl font-bold tracking-tight">CVSender</h1>
+        <span class="hidden text-sm opacity-60 md:inline">Twój asystent szukania pracy</span>
+        <span class="badge badge-ghost badge-sm hidden sm:inline-flex" id="corpus-badge" title="Wszystkie oferty, które asystent zebrał z portali i ocenił">zebrane oferty: …</span>
+        <span class="ml-1 hidden items-center gap-2 sm:flex" title="Panel sam pobiera nowe dane co 15 sekund">
+          <span class="relative inline-flex h-2 w-2 rounded-full bg-success"></span>
+          <span class="text-xs opacity-60">odświeża się samo</span>
+        </span>
+      </div>
+      <button id="refresh-btn" type="button" class="btn btn-ghost btn-sm rounded-full">↻ Odśwież</button>
+    </div>
+    <nav class="tabs tabs-boxed w-full flex-wrap justify-center bg-transparent" aria-label="Sekcje panelu">
+      <button type="button" data-page="queue" class="tab font-semibold tab-active">Oferty dla Ciebie <span class="badge badge-primary badge-sm ml-2" id="tab-count-queue"></span></button>
+      <button type="button" data-page="action" class="tab font-semibold">Wymaga uwagi <span class="badge badge-warning badge-sm ml-2" id="tab-count-action"></span></button>
+      <button type="button" data-page="sent" class="tab font-semibold">Moje aplikacje <span class="badge badge-success badge-sm ml-2" id="tab-count-sent"></span></button>
+      <button type="button" data-page="postponed" class="tab font-semibold">Odłożone <span class="badge badge-secondary badge-sm ml-2" id="tab-count-postponed"></span></button>
+      <button type="button" data-page="platforms" class="tab font-semibold">Portale <span class="badge badge-ghost badge-sm ml-2" id="tab-count-platforms"></span></button>
+      <button type="button" data-page="learning" class="tab font-semibold">Nauka</button>
+      <button type="button" data-page="help" class="tab font-semibold">❔ Jak to działa</button>
+    </nav>
+  </div>
+</header>
+
+<main class="mx-auto w-full max-w-[1720px] px-5 py-8 sm:px-8 lg:px-14">
+
+  <!-- ============================== KOLEJKA ============================== -->
+  <div class="page" id="page-queue">
+    <div id="welcome" hidden></div>
+    <div id="queue-shortlist-view">
+      <section class="mb-8">
+        <div class="mb-1 flex flex-wrap items-center gap-2.5">
+          <h2 class="m-0 text-lg font-bold">Oferty dla Ciebie</h2>
+          <span class="badge badge-info badge-sm font-semibold" id="shortlist-count"></span>
+          <button type="button" id="show-corpus-btn" class="btn btn-ghost btn-xs ml-auto rounded-full">Zobacz wszystkie zebrane oferty →</button>
+        </div>
+        <div class="mb-4 text-sm opacity-70">
+          Najlepiej dopasowane oferty (co najmniej <span id="threshold-label">60</span>/100 pkt). Przy każdej zdecyduj:
+          <b>Chcę aplikować</b>, <b>Później</b> albo <b>Nie interesuje mnie</b>. CV nigdy nie wyjdzie bez Twojego potwierdzenia.
+        </div>
+        <div id="shortlist" class="grid grid-cols-1 gap-4 xl:grid-cols-2"></div>
+        <div id="shortlist-pager" class="mt-4 flex items-center justify-center gap-3">
+          <button type="button" id="sl-prev" class="btn btn-sm">← Poprzednia</button>
+          <span class="text-sm opacity-70" id="sl-page-info"></span>
+          <button type="button" id="sl-next" class="btn btn-sm">Następna →</button>
+        </div>
+      </section>
+      <section class="mb-8" id="accepted-section" hidden>
+        <div class="mb-1 flex flex-wrap items-center gap-2.5">
+          <h2 class="m-0 text-lg font-bold">Czekają na wysłanie</h2>
+          <span class="badge badge-success badge-sm font-semibold" id="accepted-count"></span>
+        </div>
+        <div class="mb-4 text-sm opacity-70">
+          Oferty, na które chcesz aplikować. Asystent wyśle CV przy najbliższym uruchomieniu
+          i przed każdą wysyłką poprosi Cię o potwierdzenie. Wysłane trafią do zakładki <b>Moje aplikacje</b>.
+        </div>
+        <div id="accepted"></div>
+      </section>
+    </div>
+
+    <div id="queue-corpus-view" hidden>
+      <section class="mb-8">
+        <div class="mb-4 flex flex-wrap items-center gap-2.5">
+          <h2 class="m-0 text-lg font-bold">Wszystkie zebrane oferty</h2>
+          <span class="badge badge-ghost badge-sm font-semibold" id="corpus-total"></span>
+          <span class="text-sm opacity-60" id="corpus-loaded-counter"></span>
+          <button type="button" id="back-to-queue-btn" class="btn btn-ghost btn-xs ml-auto rounded-full">← Wróć do ofert dla Ciebie</button>
+        </div>
+        <div class="mb-4 text-sm opacity-70">
+          Wszystko, co asystent znalazł — także oferty z wynikiem poniżej progu (szare), które nie trafiły do Twojej listy.
+        </div>
+        <div class="card mb-4 border border-base-300 bg-base-100 shadow-sm"><div class="flex flex-wrap items-end gap-3 px-4 py-3">
+          <label class="form-control">
+            <span class="label-text pb-1 text-xs opacity-70">Szukaj</span>
+            <input type="text" id="corpus-q" placeholder="firma, stanowisko…" autocomplete="off"
+                   class="input input-bordered input-sm w-52 rounded-full">
+          </label>
+          <label class="form-control">
+            <span class="label-text pb-1 text-xs opacity-70">Źródło</span>
+            <select id="corpus-source" class="select select-bordered select-sm w-44 rounded-full">
+              <option value="">wszystkie</option>
+            </select>
+          </label>
+          <label class="form-control">
+            <span class="label-text pb-1 text-xs opacity-70">Wygasa w ciągu (dni)</span>
+            <input type="number" id="corpus-expiring" min="0" placeholder="np. 7"
+                   class="input input-bordered input-sm w-24 rounded-full">
+          </label>
+          <label class="form-control">
+            <span class="label-text pb-1 text-xs opacity-70">Sortowanie</span>
+            <select id="corpus-sort" class="select select-bordered select-sm w-36 rounded-full">
+              <option value="score">dopasowanie</option>
+              <option value="recent">najnowsze</option>
+            </select>
+          </label>
+          <label class="label cursor-pointer flex items-center gap-2 rounded-full border border-base-300 px-3 py-2">
+            <span class="label-text text-xs opacity-70">tylko zdalne</span>
+            <input type="checkbox" id="corpus-remote" class="checkbox checkbox-sm">
+          </label>
+        </div></div>
+        <div class="card bg-base-100 shadow"><div class="overflow-x-auto">
+          <table class="table table-zebra table-sm">
+            <thead><tr>
+              <th>Dopasowanie</th><th>Stanowisko</th><th>Firma</th><th>Wynagrodzenie</th>
+              <th>Portal</th><th>Ważna do</th><th>Twoja decyzja</th>
+            </tr></thead>
+            <tbody id="corpus-rows"></tbody>
+          </table>
+        </div></div>
+        <div id="corpus-sentinel" class="h-2"></div>
+        <div id="corpus-status" class="py-3 text-center text-sm opacity-60"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============================== DO AKCJI ============================== -->
+  <div class="page" id="page-action" hidden>
+    <section class="mb-11">
+      <div class="mb-1 flex items-center gap-2.5">
+        <h2 class="m-0 text-lg font-bold">Asystent utknął — potrzebna Twoja pomoc</h2>
+        <span class="badge badge-warning badge-sm font-semibold" id="blocked-count"></span>
+      </div>
+      <div class="mb-4 text-sm opacity-70">
+        Aplikacje, których asystent nie dał rady wysłać sam (np. portal wymaga konta, logowania albo CAPTCHA).
+        Dokończ je ręcznie, każ asystentowi spróbować ponownie albo zrezygnuj.
+      </div>
+      <div id="blocked"></div>
+      <p class="mb-0 mt-3 px-0.5">
+        <a id="gmail-search" href="#" target="_blank" rel="noopener" class="btn btn-ghost btn-outline btn-sm">
+          📬 Szukaj maili z potwierdzeniem aplikacji (Gmail)
+        </a>
+        <span class="ml-2 text-xs opacity-60">Niektóre portale wysyłają link, który trzeba kliknąć, żeby aplikacja doszła.</span>
+      </p>
+    </section>
+    <section class="mb-11">
+      <div class="mb-1 flex items-center gap-2.5">
+        <h2 class="m-0 text-lg font-bold">Bez odpowiedzi od ponad <span id="followup-days">7</span> dni</h2>
+        <span class="badge badge-ghost badge-sm font-semibold" id="followup-count"></span>
+      </div>
+      <div class="mb-4 text-sm opacity-70">
+        Firma długo milczy. Możesz napisać przypomnienie albo zamknąć temat — aplikacja trafi do odrzuconych.
+      </div>
+      <div id="followup"></div>
+    </section>
+  </div>
+
+  <!-- ============================== MOJE APLIKACJE ============================== -->
+  <div class="page" id="page-sent" hidden>
+    <section class="mb-11">
+      <div class="mb-1 flex flex-wrap items-center gap-2.5">
+        <h2 class="m-0 text-lg font-bold">Moje aplikacje</h2>
+        <span class="badge badge-success badge-sm font-semibold" id="apps-sent-count"></span>
+        <span class="text-sm opacity-60">w toku</span>
+        <span class="text-sm opacity-60" id="apps-loaded-counter"></span>
+        <input type="text" id="apps-search" placeholder="Szukaj firmy lub stanowiska…" autocomplete="off"
+               class="input input-bordered input-sm ml-auto w-64 rounded-full">
+      </div>
+      <div class="mb-4 text-sm opacity-70">
+        Wszystkie wysłane CV i to, na jakim są etapie. Gdy firma się odezwie, rozwiń wiersz i zmień etap
+        (np. na „Rozmowa”). Kliknięcie etapu poniżej filtruje listę.
+      </div>
+      <div id="funnel-bar" class="mb-3"></div>
+      <div id="funnel-chips" class="mb-4 flex flex-wrap items-center gap-2"></div>
+      <div id="applications"></div>
+      <div id="apps-sentinel" class="h-2"></div>
+      <div id="apps-status" class="py-3 text-center text-sm opacity-60"></div>
+    </section>
+  </div>
+
+  <!-- ============================== ODŁOŻONE ============================== -->
+  <div class="page" id="page-postponed" hidden>
+    <section class="mb-11">
+      <div class="mb-4 flex items-center gap-2.5">
+        <h2 class="m-0 text-lg font-bold">Odłożone</h2>
+        <span class="badge badge-secondary badge-sm font-semibold" id="postponed-count"></span>
+      </div>
+      <div class="-mt-2 mb-4 text-sm opacity-70">Oferty, które odłożyłeś na później albo oznaczyłeś „Nie interesuje mnie”. Zmieniłeś zdanie? Kliknij <b>↩ Przywróć</b> — oferta wróci do listy „Oferty dla Ciebie”.</div>
+      <div id="postponed"></div>
+    </section>
+  </div>
+
+  <!-- ============================== PLATFORMY ============================== -->
+  <div class="page" id="page-platforms" hidden>
+    <section class="mb-11">
+      <div class="mb-4 flex items-center gap-2.5">
+        <h2 class="m-0 text-lg font-bold">Portale z ofertami</h2>
+        <span class="badge badge-ghost badge-sm font-semibold" id="platforms-count"></span>
+      </div>
+      <div class="-mt-2 mb-4 text-sm opacity-70">
+        Strony, na których asystent szuka ofert. Status pokazuje, jak poszła ostatnia wizyta:
+        <span class="badge badge-ghost badge-sm">Nietestowany</span> jeszcze nie odwiedzony ·
+        <span class="badge badge-success badge-sm">Działa</span> ·
+        <span class="badge badge-warning badge-sm">Wymaga logowania</span> zaloguj się w Chrome ·
+        <span class="badge badge-error badge-sm">Nie działa</span>.
+        Chcesz dodać lub usunąć portal? Poproś asystenta albo edytuj plik <code>data/links.md</code>.
+      </div>
+      <div id="platforms"></div>
+    </section>
+  </div>
+
+  <!-- ============================== NAUKA ============================== -->
+  <div class="page" id="page-learning" hidden>
+    <section class="mb-11">
+      <div class="mb-4 flex items-center gap-2.5">
+        <h2 class="m-0 text-lg font-bold">Nauka</h2>
+        <span class="badge badge-ghost badge-sm font-semibold" id="learning-count"></span>
+      </div>
+      <div class="-mt-2 mb-4 text-sm opacity-70">Ściągawki przed rozmową: teoria i typowe pytania rekrutacyjne dla technologii z Twojego CV i z ofert. Kliknij kartę, a pytanie — żeby zobaczyć odpowiedź.</div>
+      <div class="mb-6">
+        <input type="text" id="learning-search-input" placeholder="Szukaj w technologiach, teorii, pytaniach…" autocomplete="off"
+               class="input input-bordered input-sm w-full max-w-xl rounded-full">
+      </div>
+      <div id="tech-grid" class="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]"></div>
+      <div id="learning-detail"></div>
+    </section>
+  </div>
+
+  <!-- ============================== JAK TO DZIAŁA ============================== -->
+  <div class="page" id="page-help" hidden>
+    <section class="mx-auto mb-11 max-w-6xl">
+      <div class="mb-8">
+        <h2 class="mb-2 mt-0 text-2xl font-bold">Jak działa CVSender</h2>
+        <p class="m-0 grow-0 max-w-3xl text-base opacity-75">CVSender szuka dla Ciebie ofert pracy, ocenia, jak bardzo do Ciebie pasują, i pomaga wysłać CV. Decyzje zawsze należą do Ciebie — nic nie zostanie wysłane bez Twojej zgody.</p>
+      </div>
+
+      <div id="help-steps"></div>
+
+      <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div class="card border border-base-300 bg-base-100 shadow-sm"><div class="card-body gap-3 p-6">
+          <h3 class="card-title m-0 text-lg">🎯 Skąd się biorą punkty?</h3>
+          <p class="m-0 grow-0 text-sm leading-relaxed opacity-80">Każda oferta dostaje od <b>0 do 100 pkt</b> — im lepiej pasuje do Twojego profilu (rola, technologie, tryb pracy, wynagrodzenie), tym więcej. Na Twoją listę trafiają oferty z co najmniej <b><span class="help-threshold">60</span> pkt</b>.</p>
+          <div class="rounded-box border border-base-300 bg-base-200/60 p-4">
+            <div class="mb-1 text-xs font-semibold uppercase tracking-wide opacity-60">Przykład</div>
+            <div class="flex items-center justify-between gap-3">
+              <div class="font-semibold">Senior Frontend Developer · zdalnie</div>
+              <span class="badge badge-success badge-sm font-bold">85/100</span>
+            </div>
+            <progress class="progress progress-success mt-2 w-full" value="85" max="100"></progress>
+            <div class="mt-2 flex flex-wrap gap-1">
+              <span class="badge badge-ghost badge-sm">Rola w tytule +25</span>
+              <span class="badge badge-ghost badge-sm">Zdalnie +20</span>
+              <span class="badge badge-ghost badge-sm">Region EU/PL +20</span>
+              <span class="badge badge-ghost badge-sm">Technologie +15</span>
+              <span class="badge badge-ghost badge-sm">Stawka +10</span>
+              <span class="badge badge-sm badge-outline border-error/50 text-error">Biuro w innym mieście −20</span>
+            </div>
+            <div class="mt-2 text-xs opacity-70">Te same „powody” zobaczysz pod każdą ofertą — zielone dodają, czerwone odejmują punkty.</div>
+          </div>
+          <p class="m-0 grow-0 text-xs opacity-60">Chcesz inaczej punktować? Poproś asystenta o ponowne przejście konfiguracji profilu (SETUP.md, Krok 3).</p>
+        </div></div>
+
+        <div class="card border border-base-300 bg-base-100 shadow-sm"><div class="card-body gap-3 p-6">
+          <h3 class="card-title m-0 text-lg">👆 Twoje decyzje</h3>
+          <p class="m-0 grow-0 text-sm leading-relaxed opacity-80">Przy każdej ofercie na liście „Oferty dla Ciebie” masz trzy przyciski:</p>
+          <div class="flex flex-col gap-3">
+            <div class="flex items-start gap-3">
+              <span class="btn btn-success btn-xs pointer-events-none shrink-0">✓ Chcę aplikować</span>
+              <span class="text-sm opacity-80">Oferta trafia do „Czekają na wysłanie”. Asystent wyśle CV przy najbliższym uruchomieniu — i zapyta Cię o potwierdzenie.</span>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="btn btn-ghost btn-outline btn-xs pointer-events-none shrink-0">⏳ Później</span>
+              <span class="text-sm opacity-80">Odkładasz decyzję. Oferta czeka w zakładce „Odłożone”.</span>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="btn btn-error btn-outline btn-xs pointer-events-none shrink-0">✕ Nie interesuje mnie</span>
+              <span class="text-sm opacity-80">Ukrywasz ofertę. Też trafia do „Odłożone” — możesz ją stamtąd przywrócić.</span>
+            </div>
+          </div>
+          <div class="alert mt-1 py-2 text-sm"><span>🔒 Logowanie do portali, zakładanie kont i CAPTCHA zawsze robisz Ty — asystent poprosi o to w zakładce „Wymaga uwagi”.</span></div>
+        </div></div>
+      </div>
+
+      <div class="card mt-6 border border-base-300 bg-base-100 shadow-sm"><div class="card-body gap-4 p-6">
+        <h3 class="card-title m-0 text-lg">📖 Słowniczek</h3>
+        <dl class="m-0 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+          <div><dt class="font-semibold">Asystent</dt><dd class="m-0 text-sm opacity-75">Agent AI (np. Claude Code), który przegląda portale i wypełnia formularze w Twoim Chrome. Uruchamiasz go poleceniem skilla <code>cvskill</code>.</dd></div>
+          <div><dt class="font-semibold">Zebrane oferty</dt><dd class="m-0 text-sm opacity-75">Wszystkie oferty pobrane z portali — także te słabo dopasowane. Zobaczysz je przyciskiem „Zobacz wszystkie zebrane oferty”.</dd></div>
+          <div><dt class="font-semibold">Dopasowanie</dt><dd class="m-0 text-sm opacity-75">Wynik 0–100 pkt: jak bardzo oferta pasuje do Twojego profilu.</dd></div>
+          <div><dt class="font-semibold">Etap</dt><dd class="m-0 text-sm opacity-75">Gdzie jest Twoja aplikacja: Wysłana → Potwierdzona → Rozmowa wstępna → Rozmowa → Oferta pracy (albo Odrzucona / Zamknięta).</dd></div>
+          <div><dt class="font-semibold">Portal</dt><dd class="m-0 text-sm opacity-75">Strona z ogłoszeniami (np. JustJoin.it, NoFluffJobs). Lista w zakładce „Portale”.</dd></div>
+          <div><dt class="font-semibold">ATS</dt><dd class="m-0 text-sm opacity-75">System rekrutacyjny pracodawcy (np. Traffit, Teamtailor), na który portal czasem przekierowuje formularz.</dd></div>
+        </dl>
+      </div></div>
+    </section>
+  </div>
+
+</main>
+
+<script>
+'use strict';
+
+// ------------------------------------------------------------------ state
+const SL_PAGE = 20;        // shortlist page size
+const CORPUS_PAGE = 20;    // corpus infinite-scroll step (server cap 200)
+const APPS_PAGE = 50;      // applications infinite-scroll step
+
+let stats = {};
+let slOffset = 0, slTotal = 0;
+let corpusMode = false;
+let corpusRows = [], corpusTotal = 0, corpusOffset = 0, corpusLoading = false;
+let appRows = [], appTotal = 0, appOffset = 0, appQuery = '', appLoading = false;
+let appStage = null;   // funnel filter: null = wszystkie, otherwise a state key
+let editingAppId = null;
+let blockedRowsCache = [];   // last DO-AKCJI payload, for the retry-prompt builder
+let appDetailsOpen = new Set();
+let postponedRows = [];
+let learningCards = [], selectedLearningSlug = null;
+let platformRows = [];
+let activePage = 'queue';
+
+// ------------------------------------------------------------ tiny helpers
+function esc(s) {
+  if (s === undefined || s === null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escAttr(s) { return esc(s); }
+const nf = new Intl.NumberFormat('pl-PL');
+function num(v) { return (v === 0 || v) ? nf.format(v) : null; }
+
+function fmtSalary(r) {
+  const lo = num(r.salary_min), hi = num(r.salary_max);
+  if (!lo && !hi) return '—';
+  const unit = String(r.salary_period || 'Month') === 'Hour' ? 'PLN/h' : 'PLN/mies.';
+  return lo && hi && lo !== hi ? `${lo}–${hi} ${unit}` : `${lo || hi} ${unit}`;
+}
+
+function threshold() { return stats.threshold ?? 60; }
+
+// Below the shortlist threshold the score is greyed out, so "30" in the
+// corpus never looks like the "62" that made it onto the list.
+function scoreBadge(score) {
+  const cls = score >= 85 ? 'badge-success' : score >= 70 ? 'badge-primary'
+    : score >= threshold() ? 'badge-warning' : 'badge-ghost opacity-70';
+  const tip = score >= threshold()
+    ? `Dopasowanie do Twojego profilu: ${score}/100 — oferta jest na liście „Oferty dla Ciebie”`
+    : `Dopasowanie ${score}/100 — poniżej progu ${threshold()} pkt, poza Twoją listą`;
+  return `<span class="badge ${cls} badge-sm font-bold whitespace-nowrap" title="${escAttr(tip)}">${esc(score)}/100</span>`;
+}
+
+function fmtDay(value) {
+  const d = new Date(value);
+  return isNaN(d) ? String(value || '') : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function expiryBadge(expiresAt) {
+  if (!expiresAt) return '<span class="text-xs opacity-50" title="Portal nie podał daty końca ogłoszenia">bez terminu</span>';
+  const d = new Date(expiresAt);
+  if (isNaN(d)) return '<span class="text-xs opacity-50">?</span>';
+  const dm = fmtDay(expiresAt);
+  const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+  if (days < 0) return `<span class="badge badge-error badge-sm whitespace-nowrap">wygasła ${dm}</span>`;
+  if (days <= 3) return `<span class="badge badge-warning badge-sm whitespace-nowrap" title="Ogłoszenie wkrótce zniknie">ważna tylko do ${dm}</span>`;
+  return `<span class="badge badge-ghost badge-sm whitespace-nowrap" title="${escAttr(expiresAt)}">ważna do ${dm}</span>`;
+}
+
+// Fallback labels for reasons scored before labels were stored per reason
+// (profile rules carry their own label from data/search_profile.json).
+const REASON_LABELS = {
+  'remote': 'Zdalnie',
+  'location-eu-remote': 'Region EU/PL',
+  'salary-midpoint': 'Stawka',
+  'onsite-city': 'Stacjonarnie',
+  'expired': 'Wygasła',
+};
+
+// Every reason, strongest first — a hidden −30 explains a low score better
+// than any of the pluses.
+function reasonChips(reasons) {
+  if (!Array.isArray(reasons) || !reasons.length) return '';
+  const sorted = reasons.slice().sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  return `<div class="flex flex-wrap items-center gap-1"><span class="text-xs opacity-60">Dlaczego:</span>${sorted.map(r => {
+    const neg = r.delta < 0;
+    const label = r.label || REASON_LABELS[r.rule] || r.rule;
+    return `<span class="badge badge-sm ${neg ? 'badge-outline text-error border-error/50' : 'badge-ghost'}">${esc(label)} ${r.delta > 0 ? '+' : '−'}${esc(Math.abs(r.delta))}</span>`;
+  }).join('')}</div>`;
+}
+
+const DECISION_BADGES = {
+  pending: ['badge-ghost', 'do decyzji'],
+  accepted: ['badge-success', 'chcę aplikować'],
+  postponed_future: ['badge-secondary', 'później'],
+  postponed_no_send: ['badge-error', 'nie interesuje mnie'],
+  handled: ['badge-ghost', 'obsłużona'],
+};
+function decisionBadge(d) {
+  const [cls, label] = DECISION_BADGES[d] || ['badge-ghost', d || '—'];
+  return `<span class="badge ${cls} badge-sm">${esc(label)}</span>`;
+}
+
+function sourceBadge(s) {
+  const short = String(s || '').replace(/^ats-/, 'ATS: ');
+  return `<span class="badge badge-outline badge-sm whitespace-nowrap" title="Portal, z którego pochodzi oferta: ${escAttr(s)}">${esc(short)}</span>`;
+}
+
+// Shared by the first-run welcome card and the "Jak to działa" tab.
+const HOW_IT_WORKS = [
+  ['🔎', 'Asystent zbiera oferty', 'Przegląda portale z zakładki <b>Portale</b> i ocenia każdą ofertę od 0 do 100 pkt według Twojego profilu.'],
+  ['👍', 'Ty wybierasz', 'W zakładce <b>Oferty dla Ciebie</b> przy każdej ofercie klikasz: <b>Chcę aplikować</b>, <b>Później</b> albo <b>Nie interesuje mnie</b>.'],
+  ['📨', 'Asystent wysyła CV', 'Przy najbliższym uruchomieniu wypełnia formularze w Twoim Chrome — zawsze pyta o potwierdzenie przed wysłaniem.'],
+  ['📈', 'Śledzisz postępy', 'Wysłane CV są w <b>Moje aplikacje</b>. Jeśli asystent utknie (np. logowanie), zobaczysz to w <b>Wymaga uwagi</b>.'],
+];
+
+function howItWorksHtml() {
+  return `<ol class="m-0 grid grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-4">${HOW_IT_WORKS.map(([icon, title, body], i) => `
+    <li class="card h-full list-none border border-base-300 bg-base-100 shadow-sm"><div class="card-body gap-2 p-5">
+      <div class="flex items-center justify-between">
+        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-content">${i + 1}</span>
+        <span class="text-2xl" aria-hidden="true">${icon}</span>
+      </div>
+      <div class="mt-1 text-base font-bold">${title}</div>
+      <div class="text-sm leading-relaxed opacity-75">${body}</div>
+    </div></li>`).join('')}</ol>`;
+}
+
+// Fresh instance (nothing scouted, nothing sent): explain the loop and the
+// first step instead of greeting the user with a row of zeros.
+function renderWelcome() {
+  const el = document.getElementById('welcome');
+  const empty = !stats.corpus && !stats.totalCount;
+  el.hidden = !empty;
+  if (!empty) return;
+  el.innerHTML = `
+    <section class="mb-8">
+      <h2 class="mb-1 mt-0 text-lg font-bold">👋 Witaj w CVSender</h2>
+      <div class="mb-4 text-sm opacity-70">Na razie nie ma tu żadnych ofert — to normalne przy pierwszym uruchomieniu. Tak wygląda cały proces:</div>
+      ${howItWorksHtml()}
+      <div class="alert mt-4 shadow-sm"><span>
+        <b>Pierwszy krok:</b> poproś asystenta (np. Claude Code w tym repozytorium) o uruchomienie skilla <code>cvskill</code>
+        — oferty pojawią się tu same, panel odświeża się co 15 sekund.
+        Jeśli nie masz jeszcze skonfigurowanego profilu, zacznij od poproszenia o przeczytanie <code>SETUP.md</code>.
+      </span></div>
+    </section>`;
+}
+
+async function post(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('request failed');
+  return res.json();
+}
+
+// ------------------------------------------------------------- stats bar
+async function loadStats() {
+  stats = await fetch('/api/stats').then(r => r.json());
+  document.getElementById('tab-count-queue').textContent = stats.shortlist;
+  document.getElementById('tab-count-action').textContent = stats.blocked + stats.followup;
+  document.getElementById('tab-count-sent').textContent = num(stats.sent) ?? '';
+  document.getElementById('tab-count-postponed').textContent = stats.postponed ?? '';
+  document.getElementById('corpus-badge').textContent = `zebrane oferty: ${nf.format(stats.corpus)}`;
+  document.getElementById('threshold-label').textContent = threshold();
+  document.querySelectorAll('.help-threshold').forEach(el => { el.textContent = threshold(); });
+  renderWelcome();
+  const sel = document.getElementById('corpus-source');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">wszystkie</option>' +
+    (stats.sources || []).map(s => `<option value="${escAttr(s.source)}">${esc(s.source)} (${nf.format(s.count)})</option>`).join('');
+  sel.value = current;
+  if (sel.value !== current) sel.value = '';
+  if (activePage === 'sent') renderFunnel();
+}
+
+// ------------------------------------------------------------- shortlist
+function offerLink(r) {
+  return `<a class="link link-primary font-semibold" href="${escAttr(r.URL)}" target="_blank" rel="noopener">${esc(r.Position)}</a>`;
+}
+
+function shortlistCard(r) {
+  return `
+  <div class="card bg-base-100 shadow">
+    <div class="card-body px-5 py-4 gap-2.5">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="truncate">${offerLink(r)}</div>
+          <div class="text-sm opacity-70">${esc(r.Company)}${r.location ? ' · ' + esc(r.location) : ''}</div>
+        </div>
+        <div class="flex flex-col items-end gap-1">
+          ${scoreBadge(r.match_score)}
+          ${sourceBadge(r.Source)}
+          ${r.dup_count > 1 ? `<span class="badge badge-ghost badge-sm" title="Ta sama oferta jest opublikowana pod ${r.dup_count} adresami — liczymy ją raz">na ${r.dup_count} portalach</span>` : ''}
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span class="font-semibold">${esc(fmtSalary(r))}</span>
+        ${expiryBadge(r.expires_at)}
+        ${r.Date ? `<span class="text-xs opacity-50" title="${escAttr(r.Date)}">znaleziona ${esc(fmtDay(r.Date))}</span>` : ''}
+      </div>
+      ${reasonChips(r.match_reasons)}
+      <div class="action-col mt-0.5 flex flex-wrap gap-2">
+        <button type="button" class="btn btn-success btn-xs btn-accept" title="Asystent wyśle CV przy najbliższym uruchomieniu (po Twoim potwierdzeniu)" onclick="setDecision('${escAttr(r.URL)}', 'accepted', this)">✓ Chcę aplikować</button>
+        <button type="button" class="btn btn-ghost btn-outline btn-xs btn-postpone" title="Przenieś do zakładki Odłożone — wrócisz do niej później" onclick="setDecision('${escAttr(r.URL)}', 'postponed_future', this)">⏳ Później</button>
+        <button type="button" class="btn btn-error btn-outline btn-xs btn-drop" title="Ukryj ofertę — znajdziesz ją w Odłożone, gdybyś zmienił zdanie" onclick="setDecision('${escAttr(r.URL)}', 'postponed_no_send', this)">✕ Nie interesuje mnie</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function loadShortlist() {
+  const data = await fetch(`/api/shortlist?limit=${SL_PAGE}&offset=${slOffset}`).then(r => r.json());
+  slTotal = data.total;
+  const el = document.getElementById('shortlist');
+  document.getElementById('shortlist-count').textContent = slTotal;
+  if (!data.rows.length) {
+    el.innerHTML = stats.corpus
+      ? '<div class="alert shadow-sm xl:col-span-2"><span>Wszystko przejrzane — nowe dopasowane oferty pojawią się tu same po kolejnym przeszukaniu portali. 🎉</span></div>'
+      : '<div class="alert shadow-sm xl:col-span-2"><span>Jeszcze nie ma ofert — asystent nie przeszukał jeszcze portali (patrz „Pierwszy krok” wyżej).</span></div>';
+  } else {
+    el.innerHTML = data.rows.map(shortlistCard).join('');
+  }
+  const page = Math.floor(slOffset / SL_PAGE) + 1;
+  const pages = Math.max(1, Math.ceil(slTotal / SL_PAGE));
+  document.getElementById('sl-page-info').textContent = `strona ${page} z ${pages}`;
+  document.getElementById('sl-prev').disabled = slOffset <= 0;
+  document.getElementById('sl-next').disabled = slOffset + SL_PAGE >= slTotal;
+  document.getElementById('shortlist-pager').style.display = slTotal > SL_PAGE ? '' : 'none';
+}
+
+// Accepted offers used to vanish from every view until the agent picked
+// them up — show them, with an undo, so "Chcę aplikować" has a visible effect.
+async function loadAccepted() {
+  const data = await fetch('/api/offers?decision=accepted&limit=200&sort=recent').then(r => r.json());
+  const rows = data.rows || [];
+  document.getElementById('accepted-section').hidden = !rows.length;
+  document.getElementById('accepted-count').textContent = rows.length;
+  document.getElementById('accepted').innerHTML = !rows.length ? '' : `
+    <div class="card bg-base-100 shadow"><div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead><tr><th>Stanowisko</th><th>Firma</th><th>Dopasowanie</th><th>Ważna do</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td>${offerLink(r)}</td>
+          <td>${esc(r.Company)}</td>
+          <td>${r.match_score === null ? '—' : scoreBadge(r.match_score)}</td>
+          <td class="whitespace-nowrap">${expiryBadge(r.expires_at)}</td>
+          <td class="action-col text-right"><button type="button" class="btn btn-ghost btn-xs" title="Cofnij — oferta wróci do listy do decyzji" onclick="setDecision('${escAttr(r.URL)}', 'pending', this)">↩ Cofnij</button></td>
+        </tr>`).join('')}</tbody>
+    </table>
+    </div></div>`;
+}
+
+async function setDecision(jobUrl, decision, btn) {
+  const group = btn ? btn.closest('.action-col') : null;
+  if (group) group.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    await post('/api/offers/decision', { job_url: jobUrl, decision });
+    await Promise.all([loadStats(), loadShortlist(), loadAccepted()]);
+    if (activePage === 'postponed') await loadPostponed();
+  } catch (err) {
+    alert('Nie udało się zapisać zmiany. Spróbuj ponownie.');
+    if (group) group.querySelectorAll('button').forEach(b => b.disabled = false);
+  }
+}
+
+// ------------------------------------------------------- corpus (lazy!)
+function corpusParams() {
+  const p = new URLSearchParams();
+  p.set('limit', CORPUS_PAGE);
+  p.set('offset', corpusOffset);
+  const q = document.getElementById('corpus-q').value.trim();
+  const src = document.getElementById('corpus-source').value;
+  const exp = document.getElementById('corpus-expiring').value;
+  if (q) p.set('q', q);
+  if (src) p.set('source', src);
+  if (exp) p.set('expiring_days', exp);
+  if (document.getElementById('corpus-remote').checked) p.set('remote', '1');
+  p.set('sort', document.getElementById('corpus-sort').value);
+  return p;
+}
+
+function corpusRowHtml(r) {
+  return `
+  <tr>
+    <td>${r.match_score === null ? '—' : scoreBadge(r.match_score)}</td>
+    <td class="max-w-[22rem] truncate" title="${escAttr(r.Position)}">${offerLink(r)}</td>
+    <td class="whitespace-nowrap">${esc(r.Company)}</td>
+    <td class="whitespace-nowrap text-sm">${esc(fmtSalary(r))}</td>
+    <td>${sourceBadge(r.Source)}</td>
+    <td class="whitespace-nowrap">${expiryBadge(r.expires_at)}</td>
+    <td>${decisionBadge(r.Decision)}</td>
+  </tr>`;
+}
+
+async function loadCorpusPage() {
+  if (corpusLoading || corpusOffset >= corpusTotal && corpusTotal !== 0) return;
+  corpusLoading = true;
+  try {
+    const data = await fetch(`/api/offers?${corpusParams()}`).then(r => r.json());
+    corpusTotal = data.total;
+    corpusRows = corpusRows.concat(data.rows);
+    corpusOffset += data.rows.length;
+    document.getElementById('corpus-rows').innerHTML = corpusRows.map(corpusRowHtml).join('');
+    document.getElementById('corpus-total').textContent = nf.format(corpusTotal);
+    document.getElementById('corpus-loaded-counter').textContent =
+      `widać ${nf.format(corpusRows.length)} z ${nf.format(corpusTotal)}`;
+    document.getElementById('corpus-status').textContent =
+      !corpusTotal ? 'Brak ofert dla tych filtrów.'
+      : corpusRows.length >= corpusTotal ? 'To już wszystkie oferty.' : 'Przewiń w dół, żeby zobaczyć więcej…';
+  } finally {
+    corpusLoading = false;
+  }
+}
+
+function resetCorpus() {
+  corpusRows = []; corpusTotal = 0; corpusOffset = 0;
+  document.getElementById('corpus-rows').innerHTML = '';
+  return loadCorpusPage();
+}
+
+function setCorpusMode(on) {
+  corpusMode = on;
+  document.getElementById('queue-shortlist-view').hidden = on;
+  document.getElementById('queue-corpus-view').hidden = !on;
+  if (on) resetCorpus();
+}
+
+// ----------------------------------------------------- DO AKCJI (action)
+function isBlocked(status) {
+  return String(status || '').trim().toLowerCase().startsWith('blocked');
+}
+
+// Long application-status strings ("Blocked - needs manual action",
+// "Applied - action required (AI interview)", "Closed - not accepting
+// applications") blow up table badges; render a short label instead and
+// keep the full string as the tooltip. Order matters: longest prefix
+// first. Defensive wrap: whatever the mapping misses must never clip.
+const STATUS_BADGES = [
+  ['blocked - retry queued', 'Ponowienie zlecone ↻', 'badge-info'],
+  ['blocked', 'Zablokowana', 'badge-warning'],
+  ['applied - action required', 'Wysłana, wymaga akcji', 'badge-warning'],
+  ['closed', 'Ogłoszenie zamknięte', 'badge-ghost'],
+  ['rejected by user', 'Zrezygnowałeś', 'badge-error'],
+  ['odrzucona przez pracodawcę', 'Odrzucona', 'badge-error'],
+  ['applied', 'Wysłana', 'badge-success'],
+  ['w trakcie', 'W trakcie', 'badge-success'],
+];
+
+function statusBadge(status) {
+  const s = String(status || '').trim();
+  const hit = STATUS_BADGES.find(([prefix]) => s.toLowerCase().startsWith(prefix));
+  const label = hit ? hit[1] : (s || '—');
+  const cls = hit ? hit[2] : (isBlocked(s) ? 'badge-warning' : 'badge-ghost');
+  return `<span class="badge ${cls} badge-sm whitespace-normal break-words max-w-[12rem] text-left" title="${escAttr(s)}">${esc(label)}</span>`;
+}
+// Blocked rows fall into three kinds, derived from the log Notes (the same
+// text the applying agent wrote when it gave up):
+//   locked     — user explicitly decided not to retry (hard cap, decision)
+//   needs-user — a retry cannot succeed without the user (account, mailto,
+//                CAPTCHA — hard rules 9/12); button stays available but labelled
+//   retryable  — technical failure (filled form lost, dead button) — the
+//                retry-this-again case
+const BLOCKED_LOCKED_RE = /user decision|hard cap|decyzja usera|nie ponawia/i;
+const BLOCKED_NEEDS_USER_RE = /\bkont[aoy]?\b|zalogowa|zaloguj|logowani|rejestracj|mailto\b|mail na\b|captcha|recaptcha|smart.?apply|icims|oauth|has[łl]a|strefa|weryfikacyjny|one[- ]time/i;
+
+function classifyBlocked(r) {
+  const notes = String(r.Notes || '');
+  if (BLOCKED_LOCKED_RE.test(notes)) return 'locked';
+  if (BLOCKED_NEEDS_USER_RE.test(notes)) return 'needs-user';
+  return 'retryable';
+}
+
+function isRetryQueued(r) {
+  return String(r.Status || '').trim().toLowerCase() === 'blocked - retry queued';
+}
+const BLOCKED_KIND_BADGE = {
+  locked: '<span class="badge badge-ghost badge-sm" title="Zdecydowano, żeby nie ponawiać tej oferty">🔒 nie ponawiamy</span>',
+  'needs-user': '<span class="badge badge-warning badge-sm" title="Asystent nie przejdzie dalej bez Ciebie (konto / logowanie / mail / CAPTCHA)">⚠ zrób to ręcznie</span>',
+  retryable: '<span class="badge badge-success badge-sm" title="Błąd techniczny — ponowna próba ma sens">↻ warto ponowić</span>',
+};
+
+function blockedActionButton(r, kind) {
+  if (kind === 'locked') return '';
+  const queued = isRetryQueued(r);
+  const label = queued ? 'zlecone ✓' : (kind === 'needs-user' ? '↻ Spróbuj mimo to' : '↻ Spróbuj ponownie');
+  return `<button type="button" class="btn ${queued ? 'btn-disabled' : 'btn-info btn-outline'} btn-xs whitespace-nowrap"
+      ${queued ? 'disabled' : ''} onclick="retryBlockedApplications([${Number(r.id)}], this)">${label}</button>`;
+}
+
+function renderBlocked(rows) {
+  document.getElementById('blocked-count').textContent = rows.length;
+  const el = document.getElementById('blocked');
+  if (!rows.length) {
+    el.innerHTML = '<div class="alert alert-success shadow-sm"><span>Wszystko idzie gładko — nic nie wymaga Twojej pomocy. 🎉</span></div>';
+    return;
+  }
+  const kinds = new Map(rows.map(r => [r.id, classifyBlocked(r)]));
+  const retryableIds = rows.filter(r => kinds.get(r.id) === 'retryable' && !isRetryQueued(r)).map(r => Number(r.id));
+  const promptIds = rows.filter(r => !isRetryQueued(r)).map(r => Number(r.id));
+  const actions = `
+    <div class="mb-3 flex flex-wrap items-center gap-2">
+      <button type="button" class="btn btn-info btn-outline btn-xs rounded-full" id="blocked-retry-bulk"
+          ${retryableIds.length ? '' : 'disabled'}
+          title="Asystent spróbuje ponownie przy najbliższym uruchomieniu"
+          onclick="retryBlockedApplications(${JSON.stringify(retryableIds)}, this)">↻ Spróbuj ponownie wszystkie, które się da (${retryableIds.length})</button>
+      <button type="button" class="btn btn-ghost btn-xs rounded-full" id="blocked-prompt-copy"
+          ${promptIds.length ? '' : 'disabled'}
+          title="Kopiuje gotowe polecenie, które możesz wkleić asystentowi w czacie"
+          onclick="copyRetryPrompt(${JSON.stringify(promptIds)}, this)">📋 Kopiuj polecenie dla asystenta (${promptIds.length})</button>
+    </div>`;
+  el.innerHTML = `${actions}
+    <div class="card border border-warning/40 bg-base-100 shadow"><div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
+      <thead><tr>
+        <th>Data</th><th>Firma</th><th>Stanowisko</th><th>Portal</th><th>Co poszło nie tak</th><th>Co dalej</th><th></th>
+      </tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td class="whitespace-nowrap">${esc(fmtDay(r.Date))}</td>
+          <td>${esc(r.Company)}</td>
+          <td>${r.URL ? `<a class="link link-primary font-semibold" href="${escAttr(r.URL)}" target="_blank" rel="noopener">${esc(r.Position)}</a>` : esc(r.Position)}</td>
+          <td>${esc(r.Source)}</td>
+          <td class="whitespace-normal break-words text-sm opacity-80">${esc(r.Notes)}</td>
+          <td class="whitespace-nowrap">${BLOCKED_KIND_BADGE[kinds.get(r.id)] || ''}</td>
+          <td class="whitespace-nowrap">
+            ${blockedActionButton(r, kinds.get(r.id))}
+            <button type="button" class="btn btn-error btn-outline btn-xs" title="Zrezygnuj z tej oferty" onclick="rejectBlockedApplication(${Number(r.id)}, this)">✕ Rezygnuję</button>
+          </td>
+        </tr>`).join('')}</tbody>
+    </table>
+    </div></div>`;
+}
+
+async function retryBlockedApplications(ids, btn) {
+  if (!Array.isArray(ids) || !ids.length) return;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await post('/api/applications/retry', { ids });
+    await Promise.all([loadStats(), loadActionTab()]);
+    if (res.skipped && res.skipped.length) {
+      alert(`${res.skipped.length} z wybranych aplikacji nie dało się ponowić (nie są już zablokowane).`);
+    }
+  } catch (err) {
+    alert('Nie udało się zlecić ponowienia. Spróbuj ponownie.');
+    if (btn) btn.disabled = false;
+  }
+}
+
+function buildRetryPrompt(rows) {
+  const items = rows.map((r, i) =>
+    `${i + 1}. ${r.Company} — ${r.Position}\n   URL: ${r.URL || '(brak URL w logu)'}\n   Powód blokady: ${String(r.Notes || '').slice(0, 300)}`);
+  return `Ponów zablokowane aplikacje (RETRY) w repo CVSender — workflow /cvskill, reguły 1-14 bez zmian poza wyjątkiem niżej.
+
+Oferty do ponowienia (${rows.length}):
+${items.join('\n\n')}
+
+Instrukcje:
+- Kolejka ponowienia: tabela offers w data/cvsender.db — wiersze z decision='accepted' i 'RETRY' w Notes (sekcja „Czekają na wysłanie” w panelu) — reguła 3.
+- Wyjątek od reguły 1 (dedup): te aplikacje SĄ już w tabeli applications jako Blocked — to celowe ponowienie, nie duplikat.
+- Najpierw sprawdź, czy oferta żyje. Wygasła → status 'Closed - not accepting applications'.
+- Sukces: zaktualizuj ISTNIEJĄCY wiersz aplikacji — status 'Applied', dopisz do Notes ' | retry OK <data>'. Nie dodawaj nowego wiersza.
+- Porażka: status z powrotem 'Blocked - needs manual action' + nowy notes z powodem.
+- Po obsłudze (sukces/porażka/wygasła) ustaw decision='handled' dla wiersza oferty, żeby zniknął z „Czekają na wysłanie”: python3 -c "import sys; sys.path.insert(0,'lib'); import store; c=store.connect('data/cvsender.db'); print(store.set_offer_decision(c,'<job_url>','handled'))"
+- Reguły 7/9/12 obowiązują: logowanie, zakładanie kont i CAPTCHA zostawiasz mnie.`;
+}
+
+async function copyRetryPrompt(ids, btn) {
+  const wanted = new Set(ids.map(Number));
+  const rows = (blockedRowsCache || []).filter(r => wanted.has(Number(r.id)));
+  if (!rows.length) return;
+  const text = buildRetryPrompt(rows);
+  try {
+    await navigator.clipboard.writeText(text);
+    if (btn) { btn.textContent = 'Skopiowano ✓'; setTimeout(() => { btn.textContent = `📋 Kopiuj polecenie dla agenta (${ids.length})`; }, 1500); }
+  } catch (err) {
+    alert('Nie udało się skopiować do schowka — skopiuj ręcznie z konsoli: window.__retryPrompt');
+    window.__retryPrompt = text;
+  }
+}
+
+function renderFollowup(data) {
+  const el = document.getElementById('followup');
+  if (!data || !data.db) {
+    document.getElementById('followup-count').textContent = '';
+    el.innerHTML = '<div class="alert alert-warning shadow-sm"><span>Nie udało się wczytać tej listy — spróbuj odświeżyć.</span></div>';
+    return;
+  }
+  document.getElementById('followup-days').textContent = data.days;
+  document.getElementById('followup-count').textContent = data.rows.length;
+  if (!data.rows.length) {
+    el.innerHTML = `<div class="alert shadow-sm"><span>Żadna firma nie milczy dłużej niż ${data.days} dni. ✓</span></div>`;
+    return;
+  }
+  const now = Date.now();
+  el.innerHTML = `
+    <div class="card bg-base-100 shadow"><div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
+      <thead><tr>
+        <th>Ostatnia zmiana</th><th>Firma</th><th>Stanowisko</th>
+        <th>Etap</th><th>Cisza od</th><th></th>
+      </tr></thead>
+      <tbody>${data.rows.map(r => {
+        const days = r.state_changed_at
+          ? Math.floor((now - new Date(r.state_changed_at).getTime()) / 86400000)
+          : '?';
+        return `
+        <tr>
+          <td class="whitespace-nowrap">${esc(fmtDay(r.state_changed_at))}</td>
+          <td>${esc(r.company)}</td>
+          <td>${r.job_url
+            ? `<a class="link link-primary font-semibold" href="${escAttr(r.job_url)}" target="_blank" rel="noopener">${esc(r.position)}</a>`
+            : esc(r.position)}</td>
+          <td>${stageBadge(r.state)}</td>
+          <td><strong>${days}</strong> dni</td>
+          <td class="whitespace-nowrap"><button type="button" class="btn btn-ghost btn-outline btn-xs" title="Uznaj, że firma nie odpowie — aplikacja trafi do odrzuconych" onclick="rejectFollowupApplication(${Number(r.id)}, this)">Zamknij temat</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+    </div></div>`;
+}
+
+async function loadActionTab() {
+  const [blockedData, followup] = await Promise.all([
+    fetch('/api/applications?blocked=1&limit=200').then(r => r.json()),
+    fetch('/api/followup').then(r => r.json()).catch(() => null),
+  ]);
+  blockedRowsCache = blockedData.rows;
+  renderBlocked(blockedData.rows);
+  renderFollowup(followup);
+}
+
+async function rejectBlockedApplication(id, btn) {
+  if (!confirm('Zrezygnować z tej oferty? Asystent nie będzie już próbował na nią aplikować.')) return;
+  if (btn) btn.disabled = true;
+  try {
+    await post('/api/applications/update', { id, status: 'Rejected by user', state: 'rejected' });
+    await Promise.all([loadStats(), loadActionTab()]);
+  } catch (err) {
+    alert('Nie udało się odrzucić oferty. Spróbuj ponownie.');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function rejectFollowupApplication(id, btn) {
+  if (!confirm('Zamknąć temat? Aplikacja zostanie oznaczona jako odrzucona (bez odpowiedzi).')) return;
+  if (btn) btn.disabled = true;
+  try {
+    await post('/api/applications/state', { id, state: 'rejected' });
+    await Promise.all([loadStats(), loadActionTab()]);
+  } catch (err) {
+    alert('Nie udało się odrzucić oferty. Spróbuj ponownie.');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ------------------------------------------------------ WYSŁANE (lazy!)
+
+// ---------------------------------------------------------- lejek (funnel)
+const STAGE_LABELS = {
+  applied: 'Wysłana',
+  verified: 'Potwierdzona',
+  screening: 'Rozmowa wstępna',
+  interview: 'Rozmowa',
+  offer: 'Oferta pracy',
+  blocked: 'Zablokowana',
+  rejected: 'Odrzucona',
+  expired: 'Zamknięta',
+};
+const STAGE_HINTS = {
+  applied: 'CV wysłane, czekamy na reakcję firmy',
+  verified: 'Portal/firma potwierdziła otrzymanie aplikacji',
+  screening: 'Pierwszy kontakt — np. rozmowa z rekruterem',
+  interview: 'Rozmowa techniczna lub z zespołem',
+  offer: 'Dostałeś ofertę pracy 🎉',
+  blocked: 'Asystent nie dokończył wysyłki — zobacz „Wymaga uwagi”',
+  rejected: 'Firma odmówiła albo zamknąłeś temat',
+  expired: 'Ogłoszenie wygasło lub zostało zamknięte',
+};
+const STAGE_BADGE_CLS = {
+  applied: 'badge-success', verified: 'badge-info', screening: 'badge-primary',
+  interview: 'badge-warning', offer: 'badge-accent', blocked: 'badge-warning',
+  rejected: 'badge-error', expired: 'badge-ghost',
+};
+
+function stageBadge(state) {
+  const s = String(state || 'applied');
+  return `<span class="badge ${STAGE_BADGE_CLS[s] || 'badge-ghost'} badge-sm whitespace-nowrap" title="${escAttr(STAGE_HINTS[s] || '')}">${esc(STAGE_LABELS[s] || s)}</span>`;
+}
+const PIPELINE_STATES = ['applied', 'verified', 'screening', 'interview', 'offer'];
+const FUNNEL_COLORS = {
+  applied: 'funnel-su', verified: 'funnel-in', screening: 'funnel-p',
+  interview: 'funnel-wa', offer: 'funnel-a',
+};
+
+function stageCounts() {
+  const stages = stats.stages || {};
+  const counts = {};
+  for (const s of Object.keys(STAGE_LABELS)) counts[s] = stages[s] || 0;
+  return counts;
+}
+
+function renderFunnel() {
+  const counts = stageCounts();
+  const sent = PIPELINE_STATES.reduce((a, s) => a + counts[s], 0);
+  document.getElementById('apps-sent-count').textContent = nf.format(sent);
+
+  const bar = document.getElementById('funnel-bar');
+  const segs = PIPELINE_STATES.filter(s => counts[s] > 0);
+  bar.innerHTML = sent
+    ? `<div class="flex h-7 w-full overflow-hidden rounded-full text-[0.7rem] font-semibold text-base-100">` +
+      segs.map(s => {
+        const wide = counts[s] / sent >= 0.12;   // thin segments: count only
+        const label = wide ? `${STAGE_LABELS[s]}&nbsp;${nf.format(counts[s])}` : nf.format(counts[s]);
+        return `<button type="button" data-stage="${s}" title="${STAGE_LABELS[s]}: ${counts[s]} — ${STAGE_HINTS[s]}"
+          class="flex items-center justify-center overflow-hidden whitespace-nowrap px-1 ${FUNNEL_COLORS[s]} ${appStage === s ? 'ring-2 ring-primary ring-offset-1 ring-offset-base-200' : ''}"
+          style="flex-grow:${counts[s]}; flex-basis:0; min-width:2rem">${label}</button>`;
+      }).join('') +
+      `</div>`
+    : '<div class="alert shadow-sm py-2"><span>Nie wysłano jeszcze żadnego CV. Wybierz oferty w zakładce „Oferty dla Ciebie”.</span></div>';
+
+  const chip = (key, label, cls) =>
+    `<button type="button" data-stage="${key}" title="${escAttr(key ? STAGE_HINTS[key] : 'Pokaż wszystkie aplikacje')}"
+        class="badge badge-sm cursor-pointer whitespace-nowrap ${cls} ${appStage === key ? 'ring-2 ring-primary/50' : ''}">${label} ${nf.format(key === '' ? (stats.totalCount ?? 0) : counts[key])}</button>`;
+  document.getElementById('funnel-chips').innerHTML =
+    chip('', 'Wszystkie', 'badge-ghost') + ' ' +
+    Object.keys(STAGE_LABELS).map(s =>
+      chip(s, STAGE_LABELS[s],
+        s === 'blocked' ? 'badge-warning' : s === 'rejected' ? 'badge-error'
+        : s === 'expired' ? 'badge-ghost' : 'badge-outline')).join(' ');
+}
+
+function setAppStage(key) {
+  appStage = key || null;
+  renderFunnel();
+  reloadApps();
+}
+
+async function quickSetStage(id, state) {
+  try {
+    const resp = await post('/api/applications/state', { id, state });
+    const row = appRows.find(r => r.id === id);
+    if (row) row.State = resp.state || state;
+    renderApplications();
+    loadStats();
+  } catch (err) {
+    alert('Nie udało się zmienić etapu. Spróbuj ponownie.');
+  }
+}
+
+function stageSelect(row) {
+  const current = String(row.State || 'applied');
+  return `<select class="select select-bordered select-sm w-full max-w-[14rem]" onchange="quickSetStage(${row.id}, this.value)">
+    ${Object.keys(STAGE_LABELS).map(s =>
+      `<option value="${s}" ${s === current ? 'selected' : ''}>${STAGE_LABELS[s]}</option>`).join('')}
+  </select>`;
+}
+
+function appRowHtml(r) {
+  const open = appDetailsOpen.has(r.id);
+  return `
+  <tr>
+    <td class="whitespace-nowrap">${esc(fmtDay(r.Date))}</td>
+    <td class="whitespace-nowrap" title="${escAttr(r.Company)}">${esc(r.Company)}</td>
+    <td>${r.URL ? `<a class="link link-primary font-semibold" href="${escAttr(r.URL)}" target="_blank" rel="noopener">${esc(r.Position)}</a>` : esc(r.Position)}</td>
+    <td>${stageBadge(r.State)}</td>
+    <td class="whitespace-nowrap">${esc(r.Source)}</td>
+    <td>
+      <button type="button" class="btn btn-ghost btn-xs" onclick="toggleAppDetails(${r.id})">${open ? '▲ Zwiń' : '✎ Zmień etap / notatki'}</button>
+    </td>
+  </tr>
+  <tr class="details-row" ${open ? '' : 'hidden'}>
+    <td colspan="6" class="bg-base-200/60">
+      <div class="grid grid-cols-1 gap-4 px-2 py-2 lg:grid-cols-3">
+        <div>
+          <div class="mb-1 text-xs font-bold uppercase tracking-wide opacity-60">Etap</div>
+          ${stageSelect(r)}
+          <div class="mt-1 text-xs opacity-60">Zmień, gdy firma się odezwie.</div>
+          <div class="mb-1 mt-3 text-xs font-bold uppercase tracking-wide opacity-60">Ostatnia informacja od asystenta</div>
+          <div>${statusBadge(r.Status)}</div>
+        </div>
+        <div>
+          <div class="mb-1 text-xs font-bold uppercase tracking-wide opacity-60">Twoje notatki</div>
+          <textarea class="textarea textarea-bordered textarea-sm min-h-[6rem] w-full" id="notes-${r.id}" placeholder="np. termin rozmowy, nazwisko rekrutera…">${esc(r.Notes)}</textarea>
+          <button type="button" class="btn btn-success btn-xs mt-1.5" onclick="saveNotes(${r.id})">Zapisz notatki</button>
+        </div>
+        <div>
+          <div class="mb-1 text-xs font-bold uppercase tracking-wide opacity-60">Jak wysłano</div>
+          <div class="whitespace-pre-wrap break-words text-sm opacity-90">${esc(r.Method) || '—'}</div>
+          <div class="mb-1 mt-3 text-xs font-bold uppercase tracking-wide opacity-60">Dlaczego pasowała</div>
+          <div class="whitespace-pre-wrap break-words text-sm opacity-90">${esc(r.Match) || '—'}</div>
+        </div>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function renderApplications() {
+  document.getElementById('apps-loaded-counter').textContent =
+    appStage ? `pokazuję tylko: ${STAGE_LABELS[appStage]} (${nf.format(appTotal)})` : '';
+  const el = document.getElementById('applications');
+  if (!appRows.length) {
+    el.innerHTML = `<div class="alert shadow-sm"><span>${appQuery || appStage ? 'Nic nie pasuje do tego wyszukiwania lub filtra.' : 'Nie ma jeszcze żadnych aplikacji.'}</span></div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="card bg-base-100 shadow"><div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
+      <thead><tr>
+        <th>Wysłano</th><th>Firma</th><th>Stanowisko</th><th>Etap</th><th>Portal</th><th></th>
+      </tr></thead>
+      <tbody>${appRows.map(appRowHtml).join('')}</tbody>
+    </table>
+    </div></div>`;
+}
+
+async function loadAppsPage() {
+  if (appLoading || (appOffset >= appTotal && appTotal !== 0)) return;
+  appLoading = true;
+  try {
+    const p = new URLSearchParams({ limit: APPS_PAGE, offset: appOffset, sort: 'recent' });
+    if (appQuery) p.set('q', appQuery);
+    if (appStage) p.set('state', appStage);
+    const data = await fetch(`/api/applications?${p}`).then(r => r.json());
+    appTotal = data.total;
+    appRows = appRows.concat(data.rows);
+    appOffset += data.rows.length;
+    renderApplications();
+    document.getElementById('apps-status').textContent =
+      appRows.length >= appTotal ? '' : 'przewiń w dół po więcej…';
+  } finally {
+    appLoading = false;
+  }
+}
+
+async function reloadApps() {
+  appRows = []; appTotal = 0; appOffset = 0;
+  await loadAppsPage();
+}
+
+function toggleAppDetails(id) {
+  if (appDetailsOpen.has(id)) appDetailsOpen.delete(id); else appDetailsOpen.add(id);
+  renderApplications();
+}
+async function saveNotes(id) {
+  const btn = document.querySelector(`#notes-${id}`)?.closest('td')?.querySelector('button');
+  if (btn) btn.disabled = true;
+  try {
+    const notes = document.getElementById(`notes-${id}`).value;
+    await post('/api/applications/update', { id, notes });
+    const row = appRows.find(r => r.id === id);
+    if (row) row.Notes = notes;
+    if (btn) { btn.textContent = 'Zapisano ✓'; setTimeout(() => { btn.textContent = 'Zapisz notatki'; btn.disabled = false; }, 1200); }
+  } catch (err) {
+    alert('Nie udało się zapisać zmiany. Spróbuj ponownie.');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ----------------------------------------------------------- ODŁOŻONE
+function renderPostponed() {
+  document.getElementById('postponed-count').textContent = postponedRows.length;
+  const el = document.getElementById('postponed');
+  if (!postponedRows.length) {
+    el.innerHTML = '<div class="alert shadow-sm"><span>Nic tu nie ma — oferty trafiają tu po kliknięciu „Później” albo „Nie interesuje mnie”.</span></div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="card bg-base-100 shadow"><div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
+      <thead><tr>
+        <th>Stanowisko</th><th>Firma</th><th>Dopasowanie</th>
+        <th>Portal</th><th>Ważna do</th><th>Twoja decyzja</th><th></th>
+      </tr></thead>
+      <tbody>${postponedRows.map(r => `
+        <tr>
+          <td>${offerLink(r)}</td>
+          <td>${esc(r.Company)}</td>
+          <td>${r.match_score === null || r.match_score === undefined ? '—' : scoreBadge(r.match_score)}</td>
+          <td>${sourceBadge(r.Source)}</td>
+          <td class="whitespace-nowrap">${expiryBadge(r.expires_at)}</td>
+          <td>${decisionBadge(r.Decision)}</td>
+          <td class="action-col"><button type="button" class="btn btn-ghost btn-xs" title="Oferta wróci do listy „Oferty dla Ciebie”" onclick="setDecision('${escAttr(r.URL)}', 'pending', this)">↩ Przywróć</button></td>
+        </tr>`).join('')}</tbody>
+    </table>
+    </div></div>`;
+}
+
+async function loadPostponed() {
+  const [fut, nosend] = await Promise.all([
+    fetch('/api/offers?decision=postponed_future&limit=200&sort=recent').then(r => r.json()),
+    fetch('/api/offers?decision=postponed_no_send&limit=200&sort=recent').then(r => r.json()),
+  ]);
+  postponedRows = fut.rows.concat(nosend.rows);
+  renderPostponed();
+}
+
+// ------------------------------------------------------------- PLATFORMY
+const PLATFORM_STATUS_BADGE = {
+  'Działa': 'badge-success',
+  'Nie działa': 'badge-error',
+  'Wymaga logowania': 'badge-warning',
+};
+
+async function loadPlatforms() {
+  try {
+    const res = await fetch('/api/platforms');
+    platformRows = (await res.json()).platforms || [];
+  } catch (err) {
+    platformRows = [];
+  }
+  renderPlatforms();
+}
+
+function renderPlatforms() {
+  const el = document.getElementById('platforms');
+  document.getElementById('platforms-count').textContent = platformRows.length;
+  document.getElementById('tab-count-platforms').textContent = platformRows.length || '';
+  if (!platformRows.length) {
+    el.innerHTML = '<div class="alert shadow-sm"><span>Nie ma jeszcze żadnych portali — poproś asystenta o konfigurację (SETUP.md, Krok 5).</span></div>';
+    return;
+  }
+  const rows = platformRows.map(p => {
+    const link = /^https?:\/\//.test(p.url)
+      ? `<a class="link link-primary break-all" href="${escAttr(p.url)}" target="_blank" rel="noopener">${esc(p.url)}</a>`
+      : esc(p.url);
+    const badge = PLATFORM_STATUS_BADGE[p.status] || 'badge-ghost';
+    return `<tr>
+      <td class="font-semibold whitespace-nowrap">${esc(p.name)}</td>
+      <td class="text-sm">${link}</td>
+      <td><span class="badge ${badge} badge-sm whitespace-nowrap">${esc(p.status)}</span></td>
+      <td class="text-sm opacity-80">${esc(p.notes)}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<div class="overflow-x-auto"><table class="table table-sm">
+    <thead><tr><th>Portal</th><th>Wyszukiwanie (link)</th><th>Status</th><th>Notatki</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+// ------------------------------------------------------------- NAUKA
+async function loadLearning() {
+  try {
+    learningCards = (await fetch('/api/learning').then(r => r.json())).cards || [];
+  } catch (err) {
+    learningCards = [];
+  }
+  renderLearning();
+}
+
+function cardMatchesQuery(card, query) {
+  if (!query) return true;
+  const hay = [
+    card.name, card.tagline,
+    ...(card.sections || []).flatMap(s => [s.title, s.body]),
+    ...(card.questions || []).flatMap(q => [q.q, q.a]),
+  ].join(' ').toLowerCase();
+  return hay.includes(query);
+}
+
+function renderLearning() {
+  const grid = document.getElementById('tech-grid');
+  const detail = document.getElementById('learning-detail');
+  if (!grid || !detail) return;
+
+  document.getElementById('learning-count').textContent = learningCards.length;
+  const query = (document.getElementById('learning-search-input').value || '').trim().toLowerCase();
+
+  if (!learningCards.length) {
+    grid.innerHTML = '<div class="alert shadow-sm"><span>Nie ma jeszcze kart. Asystent tworzy je podczas konfiguracji (SETUP.md, Krok 6) — możesz go też poprosić o karty dla wybranych technologii.</span></div>';
+    detail.innerHTML = '';
+    return;
+  }
+
+  const visibleCards = learningCards.filter(c => cardMatchesQuery(c, query));
+
+  grid.innerHTML = visibleCards.length
+    ? visibleCards.map(c => `
+      <button type="button" class="tech-card card border border-base-300 bg-base-100 p-4 text-left shadow-sm transition hover:-translate-y-px hover:shadow-md" data-slug="${escAttr(c.slug)}">
+        <div class="font-bold">${esc(c.name)}</div>
+        <div class="mt-1 line-clamp-2 text-xs opacity-60">${esc(c.tagline || '')}</div>
+        <div class="mt-2.5 text-[0.68rem] font-semibold uppercase tracking-wide opacity-60">${(c.sections || []).length} sekcji · ${(c.questions || []).length} pytań</div>
+      </button>
+    `).join('')
+    : '<div class="alert shadow-sm"><span>Brak wyników dla tego wyszukiwania.</span></div>';
+
+  grid.querySelectorAll('.tech-card').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedLearningSlug = btn.dataset.slug;
+      renderLearning();
+    });
+  });
+
+  let cardToShow = learningCards.find(c => c.slug === selectedLearningSlug);
+  if (!cardToShow || !cardMatchesQuery(cardToShow, query)) {
+    cardToShow = visibleCards[0] || null;
+    selectedLearningSlug = cardToShow ? cardToShow.slug : null;
+  }
+  grid.querySelectorAll('.tech-card').forEach(b => {
+    const selected = b.dataset.slug === selectedLearningSlug;
+    b.classList.toggle('border-primary', selected);
+    b.classList.toggle('border-base-300', !selected);
+    b.classList.toggle('ring-2', selected);
+    b.classList.toggle('ring-primary/30', selected);
+  });
+  renderLearningDetail(cardToShow, query);
+}
+
+function renderLearningDetail(card, query) {
+  const el = document.getElementById('learning-detail');
+  if (!card) { el.innerHTML = ''; return; }
+
+  const sections = (card.sections || []).map(s => `
+    <div class="card mb-3 bg-base-100 shadow"><div class="card-body px-5 py-4">
+      <h3 class="card-title text-base">${highlightHtml(esc(s.title), query)}</h3>
+      <div class="lc-body text-sm leading-relaxed opacity-90">${mdToHtml(s.body, query)}</div>
+    </div></div>
+  `).join('');
+
+  const questions = (card.questions || []).map(q => `
+    <details class="qa-item mb-2 rounded-lg border border-base-300 bg-base-100">
+      <summary class="flex cursor-pointer select-none items-start gap-2.5 px-4 py-3 text-sm font-semibold">${highlightHtml(esc(q.q), query)}</summary>
+      <div class="px-4 pb-3.5 pl-10 text-sm leading-relaxed opacity-90">${mdToHtml(q.a, query)}</div>
+    </details>
+  `).join('');
+
+  el.innerHTML = `
+    <div class="mb-5">
+      <h2 class="mb-1 mt-0 text-xl font-bold">${esc(card.name)}</h2>
+      <div class="text-sm opacity-60">${esc(card.tagline || '')}</div>
+    </div>
+    <div class="mb-3 mt-6 text-xs font-bold uppercase tracking-widest opacity-60">Teoria</div>
+    ${sections || '<div class="alert shadow-sm"><span>Brak sekcji teorii.</span></div>'}
+    <div class="mb-3 mt-6 text-xs font-bold uppercase tracking-widest opacity-60">Pytania rekrutacyjne</div>
+    ${questions || '<div class="alert shadow-sm"><span>Brak pytań.</span></div>'}
+  `;
+}
+
+function mdToHtml(text, query) {
+  if (!text) return '';
+  let safe = esc(text);
+  safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  const blocks = safe.split(/\n\s*\n/);
+  const html = blocks.map(block => {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return '';
+    if (lines.every(l => l.startsWith('- '))) {
+      return '<ul>' + lines.map(l => `<li>${l.slice(2)}</li>`).join('') + '</ul>';
+    }
+    return `<p>${lines.join('<br>')}</p>`;
+  }).join('');
+  return highlightHtml(html, query);
+}
+
+function highlightHtml(html, query) {
+  if (!query) return html;
+  const escQ = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(escQ, 'ig');
+  return html.replace(/(<[^>]+>)|([^<]+)/g, (m, tag, text) => {
+    if (tag) return tag;
+    return text.replace(re, x => `<mark>${x}</mark>`);
+  });
+}
+
+function switchPage(name) {
+  activePage = name;
+  document.querySelectorAll('.page').forEach(p => p.hidden = (p.id !== `page-${name}`));
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('tab-active', b.dataset.page === name));
+  location.hash = name;
+  if (name === 'queue' && corpusMode) resetCorpus();
+  if (name === 'action') loadActionTab();
+  if (name === 'sent') { renderFunnel(); reloadApps(); }
+  if (name === 'postponed') loadPostponed();
+  if (name === 'platforms') loadPlatforms();
+  if (name === 'learning') loadLearning();
+  if (name === 'help') document.getElementById('help-steps').innerHTML = howItWorksHtml();
+}
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ------------------------------------------------------------------ init
+document.querySelectorAll('nav.tabs button').forEach(b => {
+  b.addEventListener('click', () => switchPage(b.dataset.page));
+});
+document.getElementById('refresh-btn').addEventListener('click', async () => {
+  await loadStats();
+  if (activePage === 'queue' && !corpusMode) await Promise.all([loadShortlist(), loadAccepted()]);
+  if (activePage === 'queue' && corpusMode) await resetCorpus();
+  if (activePage === 'action') await loadActionTab();
+  if (activePage === 'sent') await reloadApps();
+  if (activePage === 'postponed') await loadPostponed();
+  if (activePage === 'platforms') await loadPlatforms();
+  if (activePage === 'learning') await loadLearning();
+});
+document.getElementById('sl-prev').addEventListener('click', () => { slOffset = Math.max(0, slOffset - SL_PAGE); loadShortlist(); });
+document.getElementById('sl-next').addEventListener('click', () => { slOffset += SL_PAGE; loadShortlist(); });
+document.getElementById('show-corpus-btn').addEventListener('click', () => setCorpusMode(true));
+document.getElementById('back-to-queue-btn').addEventListener('click', () => setCorpusMode(false));
+for (const id of ['corpus-q', 'corpus-source', 'corpus-expiring', 'corpus-remote', 'corpus-sort']) {
+  const el = document.getElementById(id);
+  el.addEventListener(el.tagName === 'INPUT' && el.type !== 'checkbox' && el.type !== 'number' ? 'input' : 'change',
+    debounce(resetCorpus, 250));
+}
+document.getElementById('apps-search').addEventListener('input', debounce(function (e) {
+  appQuery = e.target.value.trim();
+  reloadApps();
+}, 300));
+
+document.getElementById('funnel-bar').addEventListener('click', e => {
+  const btn = e.target.closest('[data-stage]');
+  if (btn) setAppStage(btn.dataset.stage);
+});
+document.getElementById('funnel-chips').addEventListener('click', e => {
+  const btn = e.target.closest('[data-stage]');
+  if (btn) setAppStage(btn.dataset.stage);
+});
+
+const corpusObserver = new IntersectionObserver(entries => {
+  if (entries.some(e => e.isIntersecting) && corpusMode) loadCorpusPage();
+}, { rootMargin: '300px' });
+corpusObserver.observe(document.getElementById('corpus-sentinel'));
+
+const appsObserver = new IntersectionObserver(entries => {
+  if (entries.some(e => e.isIntersecting) && activePage === 'sent') loadAppsPage();
+}, { rootMargin: '300px' });
+appsObserver.observe(document.getElementById('apps-sentinel'));
+
+document.getElementById('learning-search-input').addEventListener('input', renderLearning);
+
+// Auto-refresh: counts always; the visible shortlist too (never the corpus
+// scroll position, never while an editor is open).
+setInterval(() => {
+  loadStats();
+  if (activePage === 'queue' && !corpusMode && editingAppId === null) { loadShortlist(); loadAccepted(); }
+}, 15000);
+
+(async function init() {
+  await loadStats();                       // counts only
+  await loadShortlist();                   // ONE page: 20 cards
+  loadAccepted();                          // waiting for the agent; small
+  loadPlatforms();                         // tab badge; links.md is tiny
+  fetch('/api/config').then(r => r.json()).then(cfg => {
+    if (cfg && cfg.gmailSearchUrl) document.getElementById('gmail-search').href = cfg.gmailSearchUrl;
+  }).catch(() => {});
+  const initial = ['queue', 'action', 'sent', 'postponed', 'platforms', 'learning', 'help'].includes(location.hash.slice(1))
+    ? location.hash.slice(1) : 'queue';
+  switchPage(initial);
+})();
+</script>
+</body>
+</html>

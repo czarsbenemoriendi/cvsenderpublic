@@ -1,0 +1,22 @@
+{
+  "_comment": "Example search profile (DevOps). SETUP.md generates the personal copy data/search_profile.json (gitignored) from the onboarding questionnaire + CV. Schema and rule semantics: lib/profile.py. Calibrate so a strong offer reaches the shortlist threshold (60) — e.g. core role in title + remote + one secondary skill.",
+  "role": "DevOps Engineer",
+  "search_keywords": ["devops", "sre", "platform engineer", "kubernetes", "terraform"],
+  "scoring": [
+    {"id": "core-role", "label": "DevOps/SRE/Platform", "terms": ["devops", "sre", "re:site reliability", "re:platform engineer\\w*"], "where": "title", "delta": 25},
+    {"id": "core-skills", "label": "Kubernetes/Terraform", "terms": ["kubernetes", "k8s", "terraform"], "where": "musthave", "delta": 15},
+    {"id": "secondary-skills", "label": "AWS/CI/CD", "terms": ["aws", "gcp", "azure", "re:ci/?cd", "ansible", "helm"], "where": "text", "delta": 10},
+    {"id": "unwanted-stack", "label": "Mainframe/SAP", "terms": ["mainframe", "cobol", "sap"], "where": "musthave", "delta": -30}
+  ],
+  "location": {
+    "remote_bonus": 20,
+    "eu_remote_bonus": 20,
+    "onsite_penalty": -20,
+    "onsite_penalty_cities": ["warszawa", "kraków", "krakow", "gdańsk", "gdansk"]
+  },
+  "feeds": {
+    "include_title": ["devops", "sre", "re:site reliability", "platform", "cloud", "infrastructure"],
+    "jobicy_tag": "devops",
+    "remotive_category": "devops"
+  }
+}

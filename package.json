@@ -1,0 +1,8 @@
+{
+  "name": "cvsender",
+  "private": true,
+  "devDependencies": {
+    "daisyui": "^4",
+    "tailwindcss": "^3.4"
+  }
+}

@@ -1,0 +1,27 @@
+# Rzeczywisty plik CV (PDF) — nie powinien trafiać do publicznego repo
+data/*.pdf
+
+# Prawdziwe dane osobowe użytkownika po konfiguracji
+data/aboutme.md
+data/cv_info.md
+data/applications.csv
+data/offerstosend.csv
+data/*.lock
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/logs/
+data/salary_policy.json
+data/watchlist.json
+data/search_profile.json
+
+# Artefakty systemowe
+.DS_Store
+__pycache__/
+*.pyc
+
+# Panel css build chain (tailwind + daisyUI) — output is committed, deps are not
+node_modules/
+
+# Harness local state
+.claude/

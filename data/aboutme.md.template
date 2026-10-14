@@ -1,0 +1,31 @@
+# Dane kontaktowe i preferencje (do formularzy aplikacyjnych)
+
+> Ten plik jest szablonem. Na początku konfiguracji agent zmienia jego nazwę
+> na `data/aboutme.md` (usuwa końcówkę `.template`) — od tej chwili to jedyne
+> źródło prawdy o Twoich danych i plik jest ignorowany przez git.
+> Uruchom proces konfiguracji opisany w `SETUP.md`
+> (powiedz Claude: "przeczytaj SETUP.md i skonfiguruj mnie") — Claude
+> przeprowadzi Cię przez pytania i nadpisze poniższe wartości Twoimi danymi.
+> Możesz też wypełnić ten plik ręcznie, zachowując ten sam format.
+
+- **E-mail:** [TWÓJ_EMAIL]
+- **Imię:** [IMIĘ]
+- **Nazwisko:** [NAZWISKO]
+- **Telefon:** [NUMER_TELEFONU]
+- **Adres:** [MIASTO, ULICA, KOD_POCZTOWY]
+- **Data urodzenia:** [DD.MM.RRRR] (niektóre formularze o to pytają; pomiń wiersz, jeśli wolisz nie podawać)
+- **LinkedIn:** [URL_PROFILU_LINKEDIN]
+- **Poziom angielskiego:** [np. B2/C1]
+- **Dostępność:** [np. "od zaraz" — mapuj na opcję "ASAP"/"natychmiast" platformy,
+  jeśli taka istnieje, zamiast domyślnego dłuższego okresu wypowiedzenia]
+- **Forma współpracy:** [np. "B2B lub UoP — jeśli formularz wymusza jeden wybór, wybieraj B2B"]
+- **Model/tryb pracy:** [np. "wyłącznie zdalna" albo "zdalna lub hybrydowa w Warszawie" —
+  bądź precyzyjny, bo automatyzacja trzyma się tego dosłownie gdy formularz
+  wymusza jeden wybór]
+- **Stawka godzinowa (jeśli formularz wymaga jej zamiast miesięcznej):**
+  [opisz jak przeliczyć Twój zakres miesięczny na stawkę godzinową, i co robić
+  gdy widełki oferty są wyższe niż Twoje — patrz reguła 6 w `cvskill/SKILL.md`]
+- **Oczekiwania finansowe:** [ZAKRES, np. "16 000–20 000 PLN/mies."] — formularze
+  zwykle chcą jednej kwoty, nie zakresu; reguła 6 w `cvskill/SKILL.md` opisuje
+  jak wybrać konkretną wartość względem widełek oferty
+- **Wiadomość / pole "coś od siebie":** [KRÓTKI TEKST na pola typu "napisz coś o sobie"]

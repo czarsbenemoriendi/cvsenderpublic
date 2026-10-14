@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- CVSender nightly scout: runs the browserless scout at 08:07 and 17:42.
+     Off-cron minutes on purpose (research/2026-09-09-orchestration-tooling.md §2).
+     TEMPLATE — every __HOME__ is replaced with your $HOME by launchd/bootstrap.sh.
+     Install: bash launchd/bootstrap.sh -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>pl.cvsender.scout</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__HOME__/Repositories/cvsenderpublic/launchd/scout.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__HOME__/Repositories/cvsenderpublic</string>
+
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>7</integer></dict>
+    <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>42</integer></dict>
+  </array>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/Repositories/cvsenderpublic/data/logs/scout.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Repositories/cvsenderpublic/data/logs/scout.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>__HOME__</string>
+  </dict>
+</dict>
+</plist>

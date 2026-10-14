@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="pl" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CVSender — co to jest, jak działa, audyt przed udostępnieniem</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.24/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-base-300 text-base-content">
+
+  <div class="navbar bg-base-100 shadow-lg sticky top-0 z-50">
+    <div class="flex-1 px-4">
+      <span class="text-xl font-bold">🤖 CVSender</span>
+      <span class="badge badge-ghost ml-3">przewodnik po projekcie</span>
+    </div>
+    <div class="px-4">
+      <span class="badge badge-warning">audyt: 2026-09-09</span>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 py-8 space-y-12">
+
+    <!-- ============ 1. TL;DR ============ -->
+    <section class="space-y-4">
+      <h1 class="text-3xl font-bold">O co chodzi w tym projekcie — w 4 zdaniach</h1>
+      <p class="text-lg leading-relaxed">
+        <b>CVSender</b> to Twój osobisty asystent do szukania pracy. Nocny program
+        („skaut”) sam zbiera oferty pracy z portali i odkłada je w jedną bazę.
+        Ty rano otwierasz prostą stronę („panel”), przeglądasz nowe oferty i klikasz
+        ✓ / ⏳ / ✕. Te, które zaakceptujesz, wypełnia i wysyła agent AI — przez
+        prawdziwą przeglądarkę, zawsze z Twoją zgodą na konkretną ofertę.
+        Każda wysłana aplikacja ląduje w dzienniku, żeby nigdy nie wysłać dwóch
+        do tej samej firmy.
+      </p>
+      <div class="stats stats-vertical sm:stats shadow w-full bg-base-100">
+        <div class="stat">
+          <div class="stat-title">Ofert zebranych w bazie</div>
+          <div class="stat-value text-primary">19 878</div>
+          <div class="stat-desc">JustJoin.it + NoFluffJobs, stan na 2026-09-09</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Zalogowanych aplikacji</div>
+          <div class="stat-value text-secondary">76</div>
+          <div class="stat-desc">w tym 17 historycznych sprzed projektu</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Automatyczne zbieranie ofert</div>
+          <div class="stat-value text-accent">2× / dzień</div>
+          <div class="stat-desc">o 08:07 i 17:42, bez Twojego udziału</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Złożoność kodu</div>
+          <div class="stat-value">~3 200 linii</div>
+          <div class="stat-desc">czysty Python, zero zewnętrznych bibliotek</div>
+        </div>
+      </div>
+      <div class="alert alert-info">
+        <span>Dokument czyta się od góry do dołu. Obca terminologia jest tłumaczona
+        przy pierwszym użyciu; pełny słowniczek jest na dole strony.</span>
+      </div>
+    </section>
+
+    <!-- ============ 2. JAK DZIAŁA ============ -->
+    <section class="space-y-4">
+      <h2 class="text-2xl font-bold">Jak to działa — przepływ od oferty do aplikacji</h2>
+      <p>Każdy prostokąt to osobny, mały program lub plik. Strzałki pokazują, co przekazuje czego.</p>
+      <div class="card bg-base-100 shadow">
+        <div class="card-body">
+          <div class="flex flex-col lg:flex-row items-center justify-center gap-2 text-center font-semibold">
+            <div class="border border-primary rounded-box p-4 w-44">
+              <div class="text-primary text-xl">📡 SKAUT</div>
+              <div class="text-xs font-normal mt-1"><code>scout/</code></div>
+              <div class="text-xs font-normal mt-1">wchodzi na publiczne listy ofert i zapisuje nowe pozycje</div>
+            </div>
+            <div class="text-2xl px-1">→</div>
+            <div class="border border-secondary rounded-box p-4 w-44">
+              <div class="text-secondary text-xl">🗄️ BAZA</div>
+              <div class="text-xs font-normal mt-1"><code>data/cvsender.db</code></div>
+              <div class="text-xs font-normal mt-1">jeden plik-baza danych; tu żyją wszystkie oferty i aplikacje</div>
+            </div>
+            <div class="text-2xl px-1">→</div>
+            <div class="border border-accent rounded-box p-4 w-44">
+              <div class="text-accent text-xl">🖥️ PANEL</div>
+              <div class="text-xs font-normal mt-1"><code>frontend/</code></div>
+              <div class="text-xs font-normal mt-1">strona w przeglądarce: <code>127.0.0.1:8765</code></div>
+            </div>
+            <div class="text-2xl px-1">→</div>
+            <div class="border border-success rounded-box p-4 w-44">
+              <div class="text-success text-xl">👍 TY</div>
+              <div class="text-xs font-normal mt-1">klikasz ✓ akceptuj / ⏳ odłóż / ✕ nie</div>
+            </div>
+            <div class="text-2xl px-1">→</div>
+            <div class="border border-warning rounded-box p-4 w-44">
+              <div class="text-warning text-xl">🤖 AGENT</div>
+              <div class="text-xs font-normal mt-1">wypełnia formularz oferty w Chrome i wysyła</div>
+            </div>
+            <div class="text-2xl px-1">→</div>
+            <div class="border rounded-box p-4 w-44">
+              <div class="text-xl">📒 DZIENNIK</div>
+              <div class="text-xs font-normal mt-1">baza + tabela CSV; pamięta każdą wysłaną aplikację</div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <ul class="list-disc pl-6 space-y-2 text-sm">
+            <li><b>Skaut</b> nie używa przeglądarki i nie loguje się nigdzie — czyta tylko publicznie dostępne listy ofert, więc nie może niczego „zepsuć”.</li>
+            <li><b>Agent</b> działa odwrotnie: używa Twojego prawdziwego, zalogowanego Chrome (profil „CVSender”), bo formularze firm wymagają konta lub zgód. Dlatego wysyłka wymaga Twojej obecności i zgody na każdą ofertę osobno.</li>
+            <li><b>Dziennik</b> dubluje dane (baza + pliki CSV) celowo: CSV jest czytelny w Notatniku, baza jest szybsza przy 19 tys. ofert. Panel czyta bazę, a gdy jej nie ma — CSV.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 3. CO SIĘ ZACZĘŁO DZIAĆ ============ -->
+    <section class="space-y-4">
+      <h2 class="text-2xl font-bold">„Co zaczęło się dziać po zmianach?” — wyjaśnienie</h2>
+      <div class="alert alert-success">
+        <span><b>Krótko: nic złego się nie dzieje.</b> Wszystko, co nowe, to celowy
+        dorobek porannego maratonu z 2026-09-09 (15 zmian zapisanych między 08:42 a 10:42).</span>
+      </div>
+      <div class="card bg-base-100 shadow">
+        <div class="card-body space-y-3">
+          <h3 class="font-bold text-lg">1. Komputer sam zaczął coś uruchamiać</h3>
+          <p class="text-sm">
+            Zainstalowano <b>harmonogram zadań systemu macOS</b> (ang. <i>launchd</i> —
+            wbudowany „budzik”, ten sam, który budzi kopie zapasowe Time Machine).
+            Dwa razy dziennie, o <b>08:07 i 17:42</b>, odpala on skauta. Dowód:
+            plik <code>~/Library/LaunchAgents/pl.cvsender.scout.plist</code> oraz
+            rosnący dziennik <code>data/logs/scout.out.log</code>.
+          </p>
+          <h3 class="font-bold text-lg">2. Pojawiły się dziwne pliki przy bazie</h3>
+          <div class="overflow-x-auto">
+            <table class="table table-zebra">
+              <thead><tr><th>Plik</th><th>Co to jest (normalne, nie usuwać)</th></tr></thead>
+              <tbody>
+                <tr><td><code>cvsender.db</code></td><td>sama baza — tu są 19 878 ofert i 76 aplikacji</td></tr>
+                <tr><td><code>cvsender.db-wal</code></td><td>„dziennik na czysto” — baza najpierw zapisuje tu, potem porządkuje; rośnie, dopóki baza jest otwarta</td></tr>
+                <tr><td><code>cvsender.db-shm</code></td><td>pomocniczy plik do współdzielenia bazy między programami; znika sam po zamknięciu</td></tr>
+                <tr><td><code>*.csv.lock</code></td><td>sygnalizacja „plik zajęty” — chroni przed jednoczesnym zapisem dwóch programów</td></tr>
+                <tr><td><code>data/logs/</code></td><td>zapis przebiegu nocnych pobrań (kto, kiedy, ile ofert)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 class="font-bold text-lg">3. Panel zmienił źródło danych</h3>
+          <p class="text-sm">
+            Wcześniejsza wersja panelu czytała pliki CSV. Nowa czyta bazę danych
+            (szybciej i bezpieczniej przy równoległych zapisach), a CSV zostawiono
+            jako awaryjne źródło. Dlatego liczby w panelu mogą się minimalnie różnić
+            od liczb w CSV — panel i CSV to dwa widoki tych samych danych.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 4. MAPA REPO ============ -->
+    <section class="space-y-4">
+      <h2 class="text-2xl font-bold">Co leży w którym folderze</h2>
+      <div class="overflow-x-auto">
+        <table class="table table-zebra bg-base-100">
+          <thead><tr><th>Folder / plik</th><th>Rola jednym zdaniem</th></tr></thead>
+          <tbody>
+            <tr><td><code>scout/</code></td><td>Skaut: pobieranie ofert (JustJoin.it przez mapę strony, NoFluffJobs przez publiczny wykaz) + sprawdzanie, czy oferta jeszcze żyje, zanim się aplikuje.</td></tr>
+            <tr><td><code>lib/</code></td><td>Wspólne klocki: bezpieczny zapis do CSV, baza danych, polityka podawania stawki, kanał sterowania Chrome bez dodatkowych wtyczek.</td></tr>
+            <tr><td><code>frontend/</code></td><td>Panel (serwer + strona). Uruchomienie opisane w <code>JAK_URUCHOMIC.md</code>, adres <code>http://127.0.0.1:8765</code>.</td></tr>
+            <tr><td><code>data/</code></td><td>Twoje dane: CV, dane kontaktowe, kolejka ofert, dziennik aplikacji, baza. <b>Ten folder nie trafia do gita</b> (wyjaśnienie w audycie niżej).</td></tr>
+            <tr><td><code>.agents/skills/cvskill/</code></td><td>„Księga reguł” agenta: jak szukać, kiedy nie klikać, jak obsługiwać formularze firm. Agent czyta to przed każdą zmianą pracy.</td></tr>
+            <tr><td><code>research/</code></td><td>Raporty z dochodzeń: jak omijać zabezpieczenia formularzy (legalnie — ręcznym kliknięciem), skąd brać oferty.</td></tr>
+            <tr><td><code>SESSION_STATUS.md</code></td><td>Pamiętnik projektu: co zrobione, co ustalone, co dalej. Czytany na początku każdej sesji agenta.</td></tr>
+            <tr><td><code>SETUP.md</code>, <code>README.md</code>, <code>JAK_URUCHOMIC.md</code></td><td>Start dla nowej osoby: konfiguracja, opis, uruchomienie panelu.</td></tr>
+            <tr><td><code>cvskill/SKILL.md</code></td><td>Stara wersja księgi reguł — martwa, do usunięcia (oznaczona LEGACY).</td></tr>
+            <tr><td><code>index.html</code></td><td>Ten dokument. Panelowa strona o tej samej nazwie żyje w <code>frontend/static/</code> — to dwie różne rzeczy.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 5. ZŁOŻONOŚĆ ============ -->
+    <section class="space-y-4">
+      <h2 class="text-2xl font-bold">Jak bardzo złożone jest to repozytorium?</h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card bg-base-100 shadow border border-success">
+          <div class="card-body">
+            <h3 class="card-title text-success">Kod: PROSTY ✅</h3>
+            <ul class="list-disc pl-5 text-sm space-y-1">
+              <li><b>~3 200 linii</b> łącznie: panel 1 468, skaut i biblioteki ~1 660, narzędzia 170.</li>
+              <li>Czysty Python (wbudowany w Maca) — <b>zero instalowania zależności</b>, zero frameworków, zero budowania.</li>
+              <li>Panel to jeden plik HTML (1 139 linii) — bez Reacta, bez paczek z internetu.</li>
+              <li>Największa „inteligencja” siedzi w regułach dla agenta, nie w kodzie.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card bg-base-100 shadow border border-warning">
+          <div class="card-body">
+            <h3 class="card-title text-warning">Wiedza: ŚREDNIO ZŁOŻONA ⚠️</h3>
+            <ul class="list-disc pl-5 text-sm space-y-1">
+              <li><code>SESSION_STATUS.md</code> — 788 linii historii decyzji i lekcji; to tu jest „mózg” projektu.</li>
+              <li>Księga reguł agenta zawiera blisko 20 twardych zasad (np. „nigdy nie klikać Captcha”, „nie zakładać kont”) wypracowanych na realnych porażkach.</li>
+              <li>Każda platforma z ofertami ma swoją przypadłość (drobne różnice formularzy) — opisane w notatkach.</li>
+              <li>Dla nowej osoby: czyta się <code>README.md</code> → <code>SETUP.md</code> → <code>SESSION_STATUS.md</code> — w tej kolejności.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <p class="text-sm opacity-80">Repozytorium (ang. <i>repo</i> = folder z pełną historią zmian w systemie <i>git</i>) liczy <b>26 zapisanych punktów historii</b>, z czego 15 pochodzi z jednego poranka 2026-09-09. Śledzone są 39 pliki.</p>
+    </section>
+
+    <!-- ============ 6. AUDYT ============ -->
+    <section class="space-y-4">
+      <h2 class="text-2xl font-bold">🔒 Audyt przed danie komuś dostępu</h2>
+      <p class="text-sm">
+        Sprawdzono: zawartość wszystkich 26 punktów historii, listę plików śledzonych
+        przez git, ustawienia ignorowania plików (ang. <i>.gitignore</i> = lista „nie
+        wysyłaj tego”), metadane autorów zmian oraz zawartość folderu na dysku.
+      </p>
+
+      <div class="alert alert-error">
+        <div>
+          <b>🔴 1. Prawdziwe dane osobowe są w historii gita — w pliku <code>SESSION_STATUS.md</code></b>
+          <p class="text-sm mt-1">
+            Każdy, kto dostanie repo z historią, zobaczy: Twoje imię i nazwisko,
+            oba prywatne adresy e-mail, pełną listę firm, do których aplikowałeś
+            (z notatkami i wynikami) oraz Twoją strategię stawek (14 000 PLN itd.).
+            Plik jest częścią projektu, więc nie wystarczy go „odznaczyć” — trzeba
+            albo dać dostęp bez historii, albo przepisać historię.
+          </p>
+        </div>
+      </div>
+
+
+      <div class="alert alert-success">
+        <div>
+          <b>✅ 2026-09-14: znaleziska 1, 3 i 4 ROZWIĄZANE pełnym scrubem historii</b>
+          <p class="text-sm mt-1">
+            <code>git filter-repo</code> (replace-text + mailmap) zanonimizował imię,
+            oba adresy e-mail i nazwę pliku CV we wszystkich wersjach wszystkich plików,
+            a podpis autora z prywatnym mailem został przepisany na adres anonimowy.
+            Ścieżki maszyny zniknęły z <code>launchd/</code> (szablon plist + instalator
+            podstawiający <code>$HOME</code>; <code>scout.sh</code> samodzielnie lokalizuje repo).
+            Znalezisko 2 pozostaje aktualne dla ZIP-ów i kopiowania katalogu — udostępniaj
+            przez <code>git clone</code> / bundle, nie przez spakowany folder.
+          </p>
+        </div>
+      </div>
+      <div class="alert alert-error">
+        <div>
+          <b>🔴 2. Prawdziwe dane na dysku: bezpieczne przy „push”, narażone przy ZIP-ie</b>
+          <p class="text-sm mt-1">
+            CV (PDF), <code>aboutme.md</code>, <code>cv_info.md</code>, dziennik aplikacji,
+            kolejka ofert i cała baza danych leżą tylko na dysku i git ich nie wysyła
+            (ignorowanie działa — sprawdzone: w historii siedzą tylko <b>szablony</b>
+            z placeholderami jak <code>[TWÓJ_EMAIL]</code>). ALE: jeśli wyślesz
+            komuś spakowany folder albo skopiujesz katalog — to wszystko poleci razem.
+          </p>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        <div>
+          <b>🟡 3. Nazwa użytkownika Maca wplątana w pliki</b>
+          <p class="text-sm mt-1">
+            <code>~/…</code> występuje w <code>launchd/pl.cvsender.scout.plist</code>,
+            <code>launchd/scout.sh</code> i raporcie <code>research/2026-09-09-orchestration-tooling.md</code>.
+            Niesensowne przy prywatnym udostępnieniu, niepożądane przy publicznym
+            (ułatwia profilowanie). Łamie też własną zasadę projektu „żadnych
+            ścieżek specyficznych dla maszyny”.
+          </p>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        <div>
+          <b>🟡 4. Autor zmian podpisany prywatnym mailem w 4 z 26 punktów historii</b>
+          <p class="text-sm mt-1">
+            Większość zmian (19) ma podpis anonimowy GitHub, ale 4 najstarsze
+            konfiguracyjne mają <code>user@example.com</code> w metadanych.
+            Metadanych nie da się poprawić bez przepisania historii.
+          </p>
+        </div>
+      </div>
+
+      <div class="alert alert-success">
+        <div>
+          <b>🟢 5. Dobra wiadomość</b>
+          <ul class="list-disc pl-5 text-sm mt-1">
+            <li><b>Repo nigdzie nie zostało wypchnięte</b> — brak podpiętego serwera (<code>git remote</code> pusty). Danie dostępu = świadoma decyzja, nie coś co już wisi w internecie.</li>
+            <li>Pliki osobiste w historii to szablony z placeholderami — gitignore zadziałał zanim cokolwiek realnego weszło.</li>
+            <li>Niezapisanych zmian jest 8 (głównie notatki z dzisiejszej sesji i dane osobiste) — zwykłe <code>git push</code> ich i tak nie weźmie.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 class="text-xl font-bold mt-6">Trzy drogi udostępnienia — do wyboru</h3>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="card bg-base-100 shadow border border-primary">
+          <div class="card-body">
+            <div class="card-title">A. Czysta kopia <span class="badge badge-primary">REKOMENDOWANE</span></div>
+            <p class="text-sm">Tworzysz nową historię od zera (tzw. <i>orphan branch</i> — gałąź bez przeszłości). Druga osoba dostaje kod i dokumentację, zero Twoich śladów.</p>
+            <div class="mockup-code text-xs bg-neutral">
+              <pre><code>git checkout --orphan clean-main
+git add -A
+git commit -m "feat: clean snapshot"
+# potem nowy remote + push</code></pre>
+            </div>
+            <p class="text-xs opacity-70">Minus: tracisz 26-punktową historię projektu (zostaje w starym repo na Twoim dysku).</p>
+          </div>
+        </div>
+        <div class="card bg-base-100 shadow">
+          <div class="card-body">
+            <div class="card-title">B. Przepisanie historii</div>
+            <p class="text-sm">Narzędzie <code>git filter-repo</code> usuwa wskazane dane ze WSZYSTKICH 26 punktów historii (maile, ścieżki, fragmenty statusu). Historia zostaje, ale czysta.</p>
+            <p class="text-xs opacity-70">Minus: operacja nieodwracalna (robi się kopię zapasową przed), wymaga ostrożności; nadal zostaje Twoje nazwisko w treści statusu, jeśli go nie wyczyścisz.</p>
+          </div>
+        </div>
+        <div class="card bg-base-100 shadow">
+          <div class="card-body">
+            <div class="card-title">C. Dla zaufanej osoby, as-is</div>
+            <p class="text-sm">Jeśli to osoba, której ufasz jak wspólnikowi (np. współpracownik szukający razem pracy) — możesz dać dostęp takim, jakie repo jest. Wiedza w <code>SESSION_STATUS.md</code> jest wtedy atutem, nie ryzykiem.</p>
+            <p class="text-xs opacity-70">Minus: Twoje dane osobowe wychodzą poza Twój dysk — nieodwracalnie.</p>
+          </div>
+        </div>
+      </div>
+      <div class="alert">
+        <span>Napisz w czacie <b>„idź z A” / „idź z B” / „idź z C”</b>, a przygotuję to krok po kroku. Do tego czasu nic w historii nie jest ruszane.</span>
+      </div>
+    </section>
+
+    <!-- ============ 7. CODZIENNE UŻYCIE ============ -->
+    <section class="space-y-4">
+      <h2 class="text-2xl font-bold">Jak z tego korzystać na co dzień</h2>
+      <ul class="steps steps-vertical lg:steps-horizontal w-full">
+        <li class="step step-primary">
+          <div class="text-left">
+            <b>Skaut chodzi sam</b>
+            <div class="text-xs">08:07 i 17:42 — nic nie musisz</div>
+          </div>
+        </li>
+        <li class="step step-primary">
+          <div class="text-left">
+            <b>Otwórz panel</b>
+            <div class="text-xs"><code>http://127.0.0.1:8765</code></div>
+          </div>
+        </li>
+        <li class="step step-primary">
+          <div class="text-left">
+            <b>Przejrzyj kolejki</b>
+            <div class="text-xs">✓ akceptuj / ⏳ odłóż / ✕ nie</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="text-left">
+            <b>Poproś agenta o wysyłkę</b>
+            <div class="text-xs">np. „obsłuż pierwsze 3 z PRZYGOTOWANE”</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="text-left">
+            <b>Sprawdzaj „Brak odpowiedzi”</b>
+            <div class="text-xs">panel podpowie, gdzie cisza &gt; 7 dni</div>
+          </div>
+        </li>
+      </ul>
+      <div class="card bg-base-100 shadow">
+        <div class="card-body text-sm space-y-2">
+          <p><b>Zasady, których agent nigdy nie łamie</b> (pełna lista w księdze reguł):</p>
+          <ul class="list-disc pl-5">
+            <li>żadna wysyłka bez Twojej zgody na tę konkretną ofertę,</li>
+            <li>nigdy e-mailem — tylko oficjalnym formularzem oferty,</li>
+            <li>nigdy nie klika zabezpieczeń typu „przepisz tekst z obrazka” ani nie zakłada kont,</li>
+            <li>zawsze sprawdza w dzienniku, czy do danej firmy już nie aplikowano.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SŁOWNICZEK ============ -->
+    <section class="space-y-4">
+      <h2 class="text-2xl font-bold">📖 Słowniczek (bez żargonu)</h2>
+      <div class="collapse collapse-arrow bg-base-100">
+        <input type="checkbox" checked />
+        <div class="collapse-title font-semibold">Pokaż / ukryj</div>
+        <div class="collapse-content">
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><b>repozytorium (repo)</b></td><td>folder projektu plus pełna pamięć wszystkich zmian</td></tr>
+                <tr><td><b>git, commit</b></td><td>git = program-pamięć zmian; commit = jeden zapisany punkt tej pamięci (26 takich punktów mamy tu)</td></tr>
+                <tr><td><b>push / remote</b></td><td>wypchnięcie historii na serwer w internecie; remote = adres takiego serwera (u nas: brak)</td></tr>
+                <tr><td><b>.gitignore</b></td><td>lista plików, których git nigdy nie wysyła (np. CV, baza)</td></tr>
+                <tr><td><b>SQLite, plik .db</b></td><td>baza danych mieszcząca się w jednym pliku na dysku — bez serwera, bez instalacji</td></tr>
+                <tr><td><b>-wal, -shm</b></td><td>dwa pliki-towarzysze bazy: dziennik zapisów i pomoc do współdzielenia; normalne, nie usuwać ręcznie</td></tr>
+                <tr><td><b>CSV</b></td><td>tabela jako zwykły tekst — otwiera się w Excelu i Notatniku</td></tr>
+                <tr><td><b>launchd</b></td><td>wbudowany w macOS harmonogram — „budzik”, który sam odpala programy o ustalonej porze</td></tr>
+                <tr><td><b>panel</b></td><td>lokalna strona z przyciskami; działa tylko na Twoim komputerze pod adresem 127.0.0.1:8765</td></tr>
+                <tr><td><b>agent</b></td><td>program-asystent AI, który steruje przeglądarką: czyta oferty, wypełnia formularze, pyta Cię o decyzje</td></tr>
+                <tr><td><b>ATS</b></td><td>system rekrutacyjny firmy (np. Greenhouse, Workable) — ten formularz, który otwiera się po kliknięciu „Aplikuj”</td></tr>
+                <tr><td><b>harness</b></td><td>konkretny „silnik” agenta; projekt działa z każdym zgodnym ze standardem Agent Skills</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="border-t border-base-content/10 pt-4 pb-8 text-xs opacity-60 space-y-1">
+      <p>Wygenerowano 2026-09-09 na podstawie faktycznego stanu repozytorium: 26 commitów (ostatni <code>b405c2b</code>, 2026-09-09 10:42), baza <code>data/cvsender.db</code> (19 878 ofert / 76 aplikacji / 2 wpisy meta), licznik linii z <code>wc -l</code>, pliki śledzone z <code>git ls-files</code> (39), harmonogram z <code>launchd/pl.cvsender.scout.plist</code>.</p>
+      <p>Dokument jest self-contained (jedna strona HTML, styl DaisyUI + Tailwind z sieci CDN, zero własnego JavaScriptu) — można go wysłać jako jeden plik.</p>
+    </footer>
+
+  </main>
+</body>
+</html>

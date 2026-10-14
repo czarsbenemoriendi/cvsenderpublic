@@ -1,0 +1,8 @@
+{
+  "default_net_pln": 14000,
+  "band_strategy": "midpoint",
+  "hourly_divisor": 160,
+  "overrides": {
+    "example-substring-in-job-url": 15000
+  }
+}

@@ -1,0 +1,54 @@
+# [IMIĘ NAZWISKO] — CV Information
+
+> Ten plik jest szablonem. Na początku konfiguracji agent zmienia jego nazwę
+> na `data/cv_info.md` (usuwa końcówkę `.template`) — od tej chwili to jedyne
+> źródło prawdy o Twoich danych i plik jest ignorowany przez git.
+> Podczas konfiguracji (`SETUP.md`) wklej tu pełną
+> treść swojego CV (albo poproś Claude, żeby wyciągnął tekst z Twojego pliku
+> PDF/DOCX i zapisał go tutaj w Markdown) — to jest źródło do dopasowywania
+> ofert, używane zamiast parsowania PDF-a przy każdym uruchomieniu.
+
+**[Twój tytuł zawodowy, np. "DevOps Engineer"]**
+[telefon] · [email] · [miasto]
+
+## Professional Summary
+
+[2-4 zdania podsumowania doświadczenia i profilu zawodowego]
+
+## Technical Skills
+
+- [technologia/narzędzie 1]
+- [technologia/narzędzie 2]
+- ...
+
+## Languages
+
+- [język 1]
+- [język 2]
+
+## Professional Experience
+
+### [Stanowisko], [Firma] | [Miasto]
+*[Zakres dat]*
+
+**Main Responsibilities**
+- ...
+
+**Key Achievements**
+- ...
+
+## Education
+
+### [Nazwa uczelni/szkoły]
+- Specjalizacja: [...]
+- [Zakres dat]
+
+## Certifications
+
+- [certyfikat 1]
+- [certyfikat 2]
+
+## Data Protection Consent
+
+I hereby give consent for my personal data included in my application to be
+processed for the purposes of the recruitment process.
