@@ -1,7 +1,7 @@
 # CVSender — agent bootstrap
 
 This file is the cross-harness entry point (AGENTS.md convention, read by
-omp, Codex CLI, OpenCode, and other coding agents).
+Claude Code, omp, Codex CLI, OpenCode, and other coding agents).
 
 0. **Fresh clone — do this first, before anything else:** if
    `data/aboutme.md.template` / `data/cv_info.md.template` exist and
@@ -16,9 +16,9 @@ omp, Codex CLI, OpenCode, and other coding agents).
    the single source of truth for project state, decisions, and next steps.
 2. **The job-search workflow lives in the skill**
    `.agents/skills/cvskill/SKILL.md` — invoke it as `/skill:cvskill` (omp),
-   `$cvskill` (Codex CLI), or load the file directly by path. Its hard
-   rules are non-negotiable; it references browser *capabilities* only and
-   maps them to concrete tools in its appendix.
+   `$cvskill` (Codex CLI), or load the file directly by path (e.g. Claude
+   Code). Its hard rules are non-negotiable; it references browser
+   *capabilities* only and maps them to concrete tools in its appendix.
 3. **All data paths are relative to the repository root** (e.g.
    `data/cvsender.db`, not `../data/...`).
 4. User-facing docs (`README.md`, `SETUP.md`, `JAK_URUCHOMIC.md`,

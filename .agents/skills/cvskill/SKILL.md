@@ -64,8 +64,9 @@ appendix at the bottom.
   - `offers` — the scouted corpus AND the **proposal queue**: matched
     candidates waiting for the user's go-ahead. The `decision` column is
     the source of truth: `pending` (default, not yet reviewed — shortlist/
-    GŁÓWNA), `accepted` (ready to send — PRZYGOTOWANE tab),
-    `postponed_future` / `postponed_no_send` (parked — ODŁOŻONE tab), and
+    "Oferty dla Ciebie" tab), `accepted` (ready to send — "Czekają na
+    wysłanie" section of that tab), `postponed_future` / `postponed_no_send`
+    (parked — "Odłożone" tab), and
     `handled` (accepted offer already processed by an agent — hidden from
     every tab). Queue a new match via `store.upsert_offer(conn, {job_url,
     company, title, level, match, source, notes, decision})`; flip a
@@ -78,7 +79,7 @@ appendix at the bottom.
   `python3 frontend/server.py` from the repository root, then open
   http://127.0.0.1:8765) at their own pace, independent of any chat
   session; the panel's tabs mirror the `decision` states (shortlist groups
-  `pending`, PRZYGOTOWANE is `accepted`, ODŁOŻONE covers both postponed
+  `pending`, "Czekają na wysłanie" is `accepted`, "Odłożone" covers both postponed
   variants, `handled` shows nowhere). See hard rule 2 for exactly how this
   queue is used. The same server also exposes `GET /api/cv-file` serving
   the CV PDF (legacy byte path for the hard-rule-10 workaround; note

@@ -57,8 +57,8 @@ CVSender/
 | `data/cv_info.md` | Pełna treść CV (doświadczenie, umiejętności, edukacja) do dopasowywania ofert. |
 | `data/links.md` | Tabela platform ze statusem i notatkami o specyfice każdej. |
 | `data/cvsender.db` | **Jedyne źródło prawdy lejka (od 2026-09-14; CSV `applications.csv`/`offerstosend.csv` skasowane).** SQLite (helpery `lib/store.py`): tabela `applications` — log prób (kolumny `applied_date, company, position, level, match, job_url, source, status, method, notes` + derywowane `state`/`state_changed_at`); tabela `offers` — korpus zeskanowanych ofert + kolejka propozycji (`decision` ∈ `pending` / `accepted` / `postponed_future` / `postponed_no_send` / `handled` — źródło prawdy; `set_offer_decision` działa na całej grupie dedup_key). |
-| `frontend/server.py` + `frontend/static/index.html` | Lokalny panel z czterema zakładkami: **GŁÓWNA** (statystyki, "Wymaga Twojej działania" — filtruje tabelę `applications` (DB) po `Status` zaczynającym się od "Blocked", tabela `applications`, oraz "Propozycje do przejrzenia" — wiersze `Decision=pending` z przyciskami ✓ Akceptuj / ⏳ Odłóż na przyszłość / ✕ Odłóż – nie wysyłać), **PRZYGOTOWANE** (`Decision=accepted`, z przyciskiem ↩ Cofnij do przeglądu), **ODŁOŻONE** (`postponed_future` + `postponed_no_send`, z przyciskiem ↩ Przywróć), **NAUKA** (siatka kart technologii z `data/learning/*.json` — teoria + pytania rekrutacyjne, wyszukiwarka filtruje na żywo). Nawigacja przez `location.hash` (`#main`/`#prepared`/`#postponed`/`#learning`). Stdlib only (`http.server`), zero zależności. Uruchomienie: patrz `JAK_URUCHOMIC.md`. |
-| `data/learning/*.json` | Karty wiedzy zakładki NAUKA — jeden plik JSON na technologię. **Katalog zaczyna pusty** — karty generuje `SETUP.md` (Krok 5) na podstawie CV użytkownika i realnych ofert znalezionych podczas konfiguracji, nie jest to gotowa lista uniwersalna. Schemat: `{slug, name, tagline, sections: [{title, body}], questions: [{q, a}]}`. `body`/`a` mogą zawierać prosty markdown (`**pogrubienie**`, listy `- linia`) renderowany po stronie klienta. Dodanie nowej karty później: dopisać `<slug>.json` w tym katalogu wg schematu — panel podejmie go automatycznie. |
+| `frontend/server.py` + `frontend/static/index.html` | Lokalny panel (stdlib Python, zero zależności; CSS: Tailwind+daisyUI zbudowany do `frontend/static/vendor/panel.css`). Zakładki i ich zachowanie: sekcja „Panel” niżej. Uruchomienie: patrz `JAK_URUCHOMIC.md`. |
+| `data/learning/*.json` | Karty wiedzy zakładki NAUKA — jeden plik JSON na technologię. **Katalog zaczyna pusty** — karty generuje `SETUP.md` (Krok 6) na podstawie CV użytkownika i realnych ofert znalezionych podczas konfiguracji, nie jest to gotowa lista uniwersalna. Schemat: `{slug, name, tagline, sections: [{title, body}], questions: [{q, a}]}`. `body`/`a` mogą zawierać prosty markdown (`**pogrubienie**`, listy `- linia`) renderowany po stronie klienta. Dodanie nowej karty później: dopisać `<slug>.json` w tym katalogu wg schematu — panel podejmie go automatycznie. |
 | `data/logs/session_diary.md` | **Lokalny dziennik sesji (nie kommitowany; `data/logs/` w `.gitignore`)** — pełne narracje, mogą zawierać realne dane użytkownika. Konwencja: sekcja "Dziennik sesji" niżej. |
 
 ## Stan bieżący
@@ -119,7 +119,7 @@ sitemaps/APIs → scout (incremental) ──► seen_urls (TRWAŁY dedup, sha256
 matcher (kursor meta.last_matched_at) ─► offers.match_score 0-100
                                          + match_reasons (json [{"rule","delta"}])
 shortlist (widok człowieka) = match_score >= 60 AND decision='pending'
-                              AND NOT expired        ← to jest KOLEJKA w panelu
+                              AND NOT expired        ← to jest lista „Oferty dla Ciebie” w panelu
 nocny pruner:
   a) expired AND match_score < 60 AND starsze niż 14 dni → DELETE
      (hash zostaje w seen_urls — nightly dump nigdy nie wskrzesi oferty)
@@ -181,23 +181,35 @@ Pruner domyślnie: usuwa martwe (expires_at w przeszłości) niskie wyniki
 (< 60) starsze niż 14 dni; martwe wysokie wyniki znaczy state='expired' i
 trzyma je wiecznie (audyt). Oferty bez expires_at i bez score pruner omija.
 
-### Panel: KOLEJKA / DO AKCJI / WYSŁANE / ODŁOŻONE / NAUKA
+### Panel: Oferty dla Ciebie / Wymaga uwagi / Moje aplikacje / Odłożone / Portale / Nauka / Jak to działa
 
-- KOLEJKA (start): karty shortlisty (score, source, pensja, wygasa, top-3
-  powody, ✓/⏳/✕ → POST decision po job_url), stronicowanie 20/stronę;
-  „Pokaż wszystko" = tryb korpusu z filtrami (q, source, remote, expiring_days,
-  sort) i infinite scroll po 20 (IntersectionObserver; żaden widok nie ładuje
-  całej tabeli).
-- DO AKCJI: wiersze blocked + follow-up >7 dni + przycisk Gmail.
-- WYSŁANE: 50/strona infinite scroll, wyszukiwanie po stronie serwera (q),
-  rozwijany wiersz → metoda/dopasowanie/notatki + edytor + status.
-- PLATFORMY (od 2026-10-14): podgląd tabeli z `data/links.md` (platforma,
-  URL, status, notatki) przez `/api/platforms` — tylko odczyt, edycja = plik.
+> Nazwy zakładek uproszczone 2026-10-14 (audyt UX pod nietechnicznego
+> użytkownika); dawniej KOLEJKA / DO AKCJI / LEJEK / ODŁOŻONE / PLATFORMY /
+> NAUKA. Hashe URL bez zmian (`#queue`, `#action`, `#sent`, `#postponed`,
+> `#platforms`, `#learning`, nowy `#help`).
+
+- Oferty dla Ciebie (start, `#queue`): karty shortlisty (dopasowanie N/100,
+  portal, pensja, „ważna do", wszystkie powody; ✓ Chcę aplikować / ⏳ Później /
+  ✕ Nie interesuje mnie → POST decision po job_url), stronicowanie 20/stronę.
+  Pod spodem „Czekają na wysłanie" = `decision='accepted'` z ↩ Cofnij.
+  „Zobacz wszystkie zebrane oferty" = tryb korpusu z filtrami (q, source,
+  remote, expiring_days, sort) i infinite scroll po 20 (IntersectionObserver;
+  żaden widok nie ładuje całej tabeli); wyniki < progu są szare. Pusta baza →
+  karta powitalna z procesem w 4 krokach i pierwszym krokiem.
+- Wymaga uwagi (`#action`): wiersze blocked + follow-up >7 dni + przycisk Gmail.
+- Moje aplikacje (`#sent`): 50/strona infinite scroll, wyszukiwanie po stronie
+  serwera (q); w tabeli etap (`state`, polskie etykiety), rozwijany wiersz →
+  zmiana etapu + notatki; surowy `status` od agenta tylko do odczytu.
+- Portale (`#platforms`, od 2026-10-14): podgląd tabeli z `data/links.md`
+  (platforma, URL, status, notatki) przez `/api/platforms` — tylko odczyt,
+  edycja = plik.
+- Jak to działa (`#help`): proces, punktacja, słowniczek — statyczne.
 - API: /api/offers i /api/applications mają twardy limit 200/request (default
   20/50); /api/shortlist, /api/stats (liczniki badge'y); POST decision/update
   przyjmują job_url/id (stare index-routes zostają).
 - Pierwsze ładowanie strony transferuje TYLKO: /api/stats,
-  /api/shortlist?limit=20&offset=0, /api/config. Zero tabel hurtowych.
+  /api/shortlist?limit=20&offset=0, /api/offers?decision=accepted (≤200),
+  /api/platforms, /api/config. Zero tabel hurtowych.
 
 ## Dziennik sesji
 
